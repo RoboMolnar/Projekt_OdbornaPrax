@@ -12,7 +12,15 @@ export default function ForgotPassword() {
     <div className="min-h-screen grid place-items-center bg-slate-50 p-6">
       <Head title="Zabudnuté heslo" />
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-center text-black">Zabudnuté heslo</h1>
+<button
+  type="button"
+  onClick={() => window.history.back()}
+  className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100"
+>
+  ← Späť
+</button>
+
+        <h1 className="text-2xl font-bold text-center text-blue-800">Zabudnuté heslo</h1>
         <p className="mt-2 text-sm text-slate-600">
           Zadaj email a pošleme ti odkaz na obnovenie hesla.
         </p>

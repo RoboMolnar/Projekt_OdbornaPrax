@@ -22,6 +22,14 @@ return (
 <div className="min-h-screen bg-slate-50 grid place-items-center p-6">
 <Head title="Prihlásenie" />
 <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+<button
+  type="button"
+  onClick={() => window.history.back()}
+  className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100"
+>
+  ← Späť
+</button>
+
 <h1 className="text-2xl font-bold text-center text-blue-800">Prihlásenie</h1>
 <form onSubmit={submit} className="mt-6">
 <label className="block mb-4">

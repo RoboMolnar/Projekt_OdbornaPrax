@@ -30,6 +30,14 @@ export default function Register() {
     <div className="min-h-screen grid place-items-center bg-slate-50 p-6">
       <Head title="Registrácia"/>
       <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+<button
+  type="button"
+  onClick={() => window.history.back()}
+  className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100"
+>
+  ← Späť
+</button>
+
         <h1 className="text-2xl font-bold text-center text-blue-800">Registrácia</h1>
 
         {/* prepínač typu účtu */}
