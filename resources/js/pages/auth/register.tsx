@@ -1,117 +1,163 @@
-import RegisteredUserController from '@/actions/App/Http/Controllers/Auth/RegisteredUserController';
-import { login } from '@/routes';
-import { Form, Head } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
-
-import InputError from '@/components/input-error';
-import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AuthLayout from '@/layouts/auth-layout';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 
 export default function Register() {
-    return (
-        <AuthLayout
-            title="Create an account"
-            description="Enter your details below to create your account"
-        >
-            <Head title="Register" />
-            <Form
-                {...RegisteredUserController.store.form()}
-                resetOnSuccess={['password', 'password_confirmation']}
-                disableWhileProcessing
-                className="flex flex-col gap-6"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
-                                <Input
-                                    id="name"
-                                    type="text"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="name"
-                                    name="name"
-                                    placeholder="Full name"
-                                />
-                                <InputError
-                                    message={errors.name}
-                                    className="mt-2"
-                                />
-                            </div>
+  const [type, setType] = useState<'student'|'company'>('student');
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    required
-                                    tabIndex={2}
-                                    autoComplete="email"
-                                    name="email"
-                                    placeholder="email@example.com"
-                                />
-                                <InputError message={errors.email} />
-                            </div>
+  const { data, setData, post, processing, errors } = useForm({
+    name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+    account_type: 'student',
+    phone: '',
+    company_name: '',
+    company_id: '',
+    company_vat: '',
+  });
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    required
-                                    tabIndex={3}
-                                    autoComplete="new-password"
-                                    name="password"
-                                    placeholder="Password"
-                                />
-                                <InputError message={errors.password} />
-                            </div>
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    post('/register');
+  }
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password_confirmation">
-                                    Confirm password
-                                </Label>
-                                <Input
-                                    id="password_confirmation"
-                                    type="password"
-                                    required
-                                    tabIndex={4}
-                                    autoComplete="new-password"
-                                    name="password_confirmation"
-                                    placeholder="Confirm password"
-                                />
-                                <InputError
-                                    message={errors.password_confirmation}
-                                />
-                            </div>
+  function switchType(t: 'student'|'company') {
+    setType(t);
+    setData('account_type', t);
+  }
 
-                            <Button
-                                type="submit"
-                                className="mt-2 w-full"
-                                tabIndex={5}
-                                data-test="register-user-button"
-                            >
-                                {processing && (
-                                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                                )}
-                                Create account
-                            </Button>
-                        </div>
+  return (
+    <div className="min-h-screen grid place-items-center bg-slate-50 p-6">
+      <Head title="Registrácia"/>
+      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-center text-blue-800">Registrácia</h1>
 
-                        <div className="text-center text-sm text-muted-foreground">
-                            Already have an account?{' '}
-                            <TextLink href={login()} tabIndex={6}>
-                                Log in
-                            </TextLink>
-                        </div>
-                    </>
-                )}
-            </Form>
-        </AuthLayout>
-    );
+        {/* prepínač typu účtu */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => switchType('student')}
+            className={`rounded-xl px-4 py-2 border ${type==='student' ? 'border-slate-900 bg-slate-900 text-blue-200' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+          >
+            Žiak
+          </button>
+          <button
+            type="button"
+            onClick={() => switchType('company')}
+            className={`rounded-xl px-4 py-2 border ${type==='company' ? 'border-slate-900 bg-slate-900 text-blue-200' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+          >
+            Firma
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="mt-6 space-y-4">
+          <div>
+            <label className="block text-sm text-slate-700">Meno / Kontaktná osoba</label>
+            <input
+              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+              value={data.name}
+              onChange={(e) => setData('name', e.target.value)}
+              required
+            />
+            {errors.name && <p className="text-sm text-rose-600 mt-1">{errors.name}</p>}
+          </div>
+
+          {/* Firemné polia len pre company */}
+          {type === 'company' && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-700">Názov firmy</label>
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                  value={data.company_name}
+                  onChange={(e) => setData('company_name', e.target.value)}
+                  required
+                />
+                {errors.company_name && <p className="text-sm text-rose-600 mt-1">{errors.company_name}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-700">IČO (voliteľné)</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                    value={data.company_id}
+                    onChange={(e) => setData('company_id', e.target.value)}
+                  />
+                  {errors.company_id && <p className="text-sm text-rose-600 mt-1">{errors.company_id}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-700">IČ DPH (voliteľné)</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                    value={data.company_vat}
+                    onChange={(e) => setData('company_vat', e.target.value)}
+                  />
+                  {errors.company_vat && <p className="text-sm text-rose-600 mt-1">{errors.company_vat}</p>}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-slate-700">Email</label>
+              <input
+                type="email"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                value={data.email}
+                onChange={(e) => setData('email', e.target.value)}
+                required
+              />
+              {errors.email && <p className="text-sm text-rose-600 mt-1">{errors.email}</p>}
+            </div>
+            <div>
+              <label className="block text-sm text-slate-700">Telefón (voliteľné)</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                value={data.phone}
+                onChange={(e) => setData('phone', e.target.value)}
+              />
+              {errors.phone && <p className="text-sm text-rose-600 mt-1">{errors.phone}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-slate-700">Heslo</label>
+              <input
+                type="password"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                value={data.password}
+                onChange={(e) => setData('password', e.target.value)}
+                required
+              />
+              {errors.password && <p className="text-sm text-rose-600 mt-1">{errors.password}</p>}
+            </div>
+            <div>
+              <label className="block text-sm text-slate-700">Potvrdenie hesla</label>
+              <input
+                type="password"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-black"
+                value={data.password_confirmation}
+                onChange={(e) => setData('password_confirmation', e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <button
+            disabled={processing}
+            className="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:shadow disabled:opacity-50"
+          >
+            {processing ? 'Vytváram účet…' : 'Vytvoriť účet'}
+          </button>
+
+          <p className="text-center text-sm text-slate-600">
+            Máš účet? <Link href="/login" className="text-slate-900 hover:underline">Prihlás sa</Link>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
 }
