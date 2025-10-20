@@ -3,61 +3,64 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
-use Illuminate\Http\RedirectResponse;
+use App\Models\User;
+use App\Models\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
-use Laravel\Fortify\Features;
+use Illuminate\Http\RedirectResponse;
 
 class AuthenticatedSessionController extends Controller
 {
-    /**
-     * Show the login page.
-     */
-    public function create(Request $request): Response
+    public function create(): Response
     {
-        return Inertia::render('auth/login', [
-            'canResetPassword' => Route::has('password.request'),
-            'status' => $request->session()->get('status'),
-        ]);
+        return Inertia::render('auth/login'); // resources/js/pages/auth/login.tsx
     }
 
-    /**
-     * Handle an incoming authentication request.
-     */
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
-        $user = $request->validateCredentials();
+        $data = $request->validate([
+            'email'    => ['required','email'],
+            'password' => ['required','string'],
+            'remember' => ['nullable','boolean'],
+        ]);
 
-        if (Features::enabled(Features::twoFactorAuthentication()) && $user->hasEnabledTwoFactorAuthentication()) {
-            $request->session()->put([
-                'login.id' => $user->getKey(),
-                'login.remember' => $request->boolean('remember'),
-            ]);
+        
+        $remember = false;
 
-            return to_route('two-factor.login');
+        // 1) študent
+        if ($u = User::where('email', $data['email'])->first()) {
+            if (Hash::check($data['password'], $u->password)) {
+                Auth::guard('web')->login($u, $remember);
+                $request->session()->regenerate();
+                return redirect()->intended(route('dashboard'));
+            }
         }
 
-        Auth::login($user, $request->boolean('remember'));
+        // 2) firma
+        if ($c = Company::where('email', $data['email'])->first()) {
+            if (!empty($c->password) && Hash::check($data['password'], $c->password)) {
+                Auth::guard('company')->login($c, $remember);
+                $request->session()->regenerate();
+                return redirect()->intended(route('dashboard'));
+            }
+        }
 
-        $request->session()->regenerate();
-
-        return redirect()->intended(route('dashboard', absolute: false));
+        return back()->withErrors([
+            'email' => 'Nesprávny email alebo heslo.',
+        ])->onlyInput('email');
     }
 
-    /**
-     * Destroy an authenticated session.
-     */
     public function destroy(Request $request): RedirectResponse
     {
         Auth::guard('web')->logout();
+        Auth::guard('company')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect()->route('home');
     }
 }
