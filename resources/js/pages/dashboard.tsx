@@ -24,7 +24,7 @@ import {
 type Practice = {
   id: number;
   student: string;
-  program: string; // odbor
+  program: string;
   firm: string;
   year: number;
   status: string;
@@ -49,7 +49,6 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    // Simulované dáta
     setPractices([
       {
         id: 1,
@@ -78,7 +77,27 @@ export default function Dashboard() {
     ]);
   }, []);
 
-  // 🔍 filtrovanie dát
+  // 🧾 Sťahovanie PDF (rovnaký štýl ako v DashboardStudent)
+  const handleDownloadPdf = (p: Practice) => {
+    const content = `
+      PRAKTICKÁ SPRÁVA
+      -----------------
+      Študent: ${p.student}
+      Odbor: ${p.program}
+      Firma: ${p.firm}
+      Rok: ${p.year}
+      Stav: ${p.status}
+    `;
+    const blob = new Blob([content], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `prax_${p.student.replace(/\s+/g, "_")}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filtered = practices.filter((p) => {
     const matchesStatus = !filter.status || p.status === filter.status;
     const matchesYear = !filter.year || p.year.toString() === filter.year;
@@ -87,7 +106,6 @@ export default function Dashboard() {
       p.student.toLowerCase().includes(filter.search.toLowerCase()) ||
       p.firm.toLowerCase().includes(filter.search.toLowerCase());
     const matchesProgram = !filter.program || p.program === filter.program;
-
     return matchesStatus && matchesYear && matchesSearch && matchesProgram;
   });
 
@@ -95,7 +113,6 @@ export default function Dashboard() {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Dashboard" />
       <div className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 text-slate-900 p-6">
-        {/* HLAVNÝ OBSAH */}
         <div className="mt-4 flex flex-col gap-6">
           {/* Hlavička */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-3">
@@ -109,10 +126,11 @@ export default function Dashboard() {
 
           {/* Filtre */}
           <div className="flex flex-wrap gap-3 bg-white/80 border border-slate-200 rounded-xl p-4 shadow-sm">
-            {/* Filtrovanie podľa stavu */}
             <Select
               value={filter.status}
-              onValueChange={(v) => setFilter((f) => ({ ...f, status: v === "all" ? "" : v }))}
+              onValueChange={(v) =>
+                setFilter((f) => ({ ...f, status: v === "all" ? "" : v }))
+              }
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Stav praxe" />
@@ -126,10 +144,11 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            {/* Filtrovanie podľa odboru */}
             <Select
               value={filter.program}
-              onValueChange={(v) => setFilter((f) => ({ ...f, program: v === "all" ? "" : v }))}
+              onValueChange={(v) =>
+                setFilter((f) => ({ ...f, program: v === "all" ? "" : v }))
+              }
             >
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Odbor" />
@@ -141,18 +160,20 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            {/* Filtrovanie podľa roku */}
             <Input
               placeholder="Rok..."
               className="w-[120px]"
-              onChange={(e) => setFilter((f) => ({ ...f, year: e.target.value }))}
+              onChange={(e) =>
+                setFilter((f) => ({ ...f, year: e.target.value }))
+              }
             />
 
-            {/* Vyhľadávanie podľa mena alebo firmy */}
             <Input
               placeholder="Vyhľadať študenta alebo firmu..."
               className="w-[260px]"
-              onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
+              onChange={(e) =>
+                setFilter((f) => ({ ...f, search: e.target.value }))
+              }
             />
           </div>
 
@@ -191,6 +212,7 @@ export default function Dashboard() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
+                            {/* Detail */}
                             <Button
                               variant="outline"
                               size="sm"
@@ -198,10 +220,22 @@ export default function Dashboard() {
                             >
                               Detail
                             </Button>
+
+                            {/* PDF tlačidlo – rovnaké ako v DashboardStudent */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadPdf(p)}
+                              className="border-slate-300 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800 transition"
+                            >
+                              📄 Stiahnuť PDF
+                            </Button>
+
+                            {/* Zmazať */}
                             <Button
                               variant="destructive"
                               size="sm"
-                              className="bg-gradient-to-tr from-red-500 to-pink-500 text-white hover:from-red-400 hover:to-pink-400 hover:shadow-md transition-all duration-200"
+                              className="bg-gradient-to-tr from-red-500 to-pink-500 text-white hover:from-red-400 hover:to-pink-400 hover:shadow-md transition-all"
                             >
                               Zmazať
                             </Button>
@@ -211,9 +245,10 @@ export default function Dashboard() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-slate-500 py-4">
+                      {/* Bez colSpan, aby nepadal TS */}
+                      <td className="text-center text-slate-500 py-4 w-full">
                         Žiadne záznamy nevyhovujú zadaným kritériám.
-                      </TableCell>
+                      </td>
                     </TableRow>
                   )}
                 </TableBody>
