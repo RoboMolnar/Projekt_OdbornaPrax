@@ -4,34 +4,55 @@ import { useState } from 'react';
 export default function Register() {
   const [type, setType] = useState<'student'|'company'>('student');
 
-  const { data, setData, post, processing, errors } = useForm({
+  const { data, setData, post, processing, errors, transform } = useForm({
     // shared
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
-    account_type: 'student',
+    account_type: 'student',   // UI stav (ponecháme, ale backend použije 'role')
 
     // optional shared
     phone: '',
 
-    // company-only payload
+    // company-only payload (ponechané kvôli UI; backend ich môže ignorovať)
     company_name: '',
     company_id: '',
     company_vat: '',
-
   });
 
   const isCompany = type === 'company';
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    post(isCompany ? '/register-company' : '/register-student');
-  }
-
   function switchType(t: 'student'|'company') {
     setType(t);
     setData('account_type', t);
+  }
+
+  function splitName(full: string) {
+    const trimmed = (full || '').trim().replace(/\s+/g, ' ');
+    if (!trimmed) return { first_name: '', last_name: '' };
+    const parts = trimmed.split(' ');
+    if (parts.length === 1) return { first_name: parts[0], last_name: '' };
+    const first_name = parts.shift() as string;
+    const last_name = parts.join(' ');
+    return { first_name, last_name };
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+
+    // dopošleme role + first_name/last_name odvodené z name
+    const role = isCompany ? 'company' : 'student';
+    const { first_name, last_name } = splitName(data.name);
+
+    transform((payload) => ({
+      ...payload,
+      role,            // <- dôležité pre backend
+      first_name,
+      last_name,
+    }));
+
+    post('/register');
   }
 
   return (
@@ -67,6 +88,9 @@ export default function Register() {
         </div>
 
         <form onSubmit={submit} className="mt-6 space-y-4">
+          {/* role pošleme aj neviditeľne, aby sa nestratila pri non-JS navigácii */}
+          <input type="hidden" name="role" value={isCompany ? 'company' : 'student'} />
+
           <div>
             <label className="block text-sm text-slate-700">Meno / Kontaktná osoba</label>
             <input
@@ -79,7 +103,7 @@ export default function Register() {
           </div>
 
           {/* Firemné polia len pre company */}
-          {type === 'company' && (
+          {isCompany && (
             <>
               <div>
                 <label className="block text-sm text-slate-700">Názov firmy</label>
