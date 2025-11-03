@@ -29,6 +29,7 @@ return new class extends Migration
             $table->integer('company_id')->nullable()->index('idx_users_company');
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrentOnUpdate()->useCurrent();
+            $table->rememberToken()->nullable();
         });
     }
 

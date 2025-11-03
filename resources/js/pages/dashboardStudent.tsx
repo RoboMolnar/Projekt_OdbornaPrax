@@ -21,21 +21,21 @@ type Practice = {
   status: string;
 };
 
-const breadcrumbs = [{ title: "Dashboard", href: "/dashboard" }];
+const breadcrumbs = [{ title: "Dashboard študenta", href: "/dashboard" }];
 
 export default function DashboardStudent() {
   const [practices, setPractices] = useState<Practice[]>([]);
 
   useEffect(() => {
     setPractices([
-      { id: 1, firm: "TechCorp s.r.o.", program: "AI22m", year: 2025, status: "Vytvorená" },
+      { id: 1, firm: "Fix-servis s.r.o.", program: "AI22m", year: 2025, status: "Vytvorená" },
     ]);
   }, []);
 
 
   const handleDownload = (practice: Practice) => {
 
-    alert(`📄 Sťahujem PDF pre prax: ${practice.firm}`);
+    alert(` Sťahujem PDF pre prax: ${practice.firm}`);
   };
 
   return (

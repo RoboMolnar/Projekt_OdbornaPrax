@@ -22,7 +22,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
     e?.preventDefault();
     cleanup();
     router.flushAll();
-    post('/auth/logout');
+    post('/logout'); // ⬅️ upravené z '/auth/logout'
   };
 
   return (
@@ -45,7 +45,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             onClick={cleanup}
           >
             <Settings className="mr-2" />
-            Settings
+            Nastavenia
           </Link>
         </DropdownMenuItem>
       </DropdownMenuGroup>
@@ -59,7 +59,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
           data-test="logout-button"
         >
           <LogOut className="mr-2" />
-          Log out
+          Odhlásiť sa
         </button>
       </DropdownMenuItem>
     </>

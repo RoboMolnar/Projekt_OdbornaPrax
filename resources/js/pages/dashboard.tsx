@@ -37,7 +37,7 @@ type Filter = {
   program: string;
 };
 
-const breadcrumbs = [{ title: "Dashboard", href: "/dashboard" }];
+const breadcrumbs = [{ title: "Dashboard garanta", href: "/dashboard" }];
 
 export default function Dashboard() {
   const [practices, setPractices] = useState<Practice[]>([]);
@@ -52,7 +52,7 @@ export default function Dashboard() {
     setPractices([
       {
         id: 1,
-        student: "Ján Novák",
+        student: "Ondrej Malý",
         program: "AI22m",
         firm: "TechCorp s.r.o.",
         year: 2025,
@@ -60,7 +60,7 @@ export default function Dashboard() {
       },
       {
         id: 2,
-        student: "Petra Kováčová",
+        student: "Andrea Ťažká",
         program: "AI22m",
         firm: "SoftVision",
         year: 2025,
@@ -68,7 +68,7 @@ export default function Dashboard() {
       },
       {
         id: 3,
-        student: "Marek Hruška",
+        student: "Adam Dostal",
         program: "AI22b",
         firm: "Datacom",
         year: 2024,
@@ -111,7 +111,7 @@ export default function Dashboard() {
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Dashboard" />
+      <Head title="Dashboard garanta" />
       <div className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 text-slate-900 p-6">
         <div className="mt-4 flex flex-col gap-6">
           {/* Hlavička */}

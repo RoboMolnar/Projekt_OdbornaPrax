@@ -19,7 +19,8 @@ Route::post('/register/student', [RegisterStudentController::class, 'store'])->n
 Route::post('/register/company', [RegisterCompanyController::class, 'store'])->name('register.company');
 
 Route::middleware(['signed', 'throttle:10,1'])->group(function () {
-    Route::get('/company/activate/{user}', [CompanyActivationController::class, 'activate'])->name('company.activate');
+    Route::get('/company/activate/{user}', [CompanyActivationController::class, 'activate'])
+        ->name('company.activate');
 });
 
 Route::middleware(['auth:web,company'])->group(function () {
@@ -28,8 +29,34 @@ Route::middleware(['auth:web,company'])->group(function () {
 });
 
 Route::middleware(['auth:web,company', 'force.password.change'])->group(function () {
-    Route::get('/dashboard', fn () => Inertia::render('dashboard'))->name('dashboard');
-    Route::get('/dashboard-student', fn () => Inertia::render('dashboardStudent'))->name('dashboard.student');
+    // Vstupný bod po prihlásení – presmerovanie podľa roly
+    Route::get('/dashboard', function () {
+        $user = Auth::user() ?? Auth::guard('company')->user();
+        if (!$user) {
+            return redirect()->route('home');
+        }
+
+        $role = $user->role ?? null;
+
+        return match ($role) {
+            'student'               => redirect()->route('dashboard.student'),
+            'company', 'firma'      => redirect()->route('dashboard.company'),
+            'garant', 'teacher'     => redirect()->route('dashboard.garant'),
+            default                 => redirect()->route('dashboard.garant'),
+        };
+    })->name('dashboard');
+
+    // ✅ Garant – TERAZ správne rendruje 'dashboard' (resources/js/pages/dashboard.tsx)
+    Route::get('/dashboard-garant', fn () => Inertia::render('dashboard'))
+        ->name('dashboard.garant');
+
+    // 📚 Študent
+    Route::get('/dashboard-student', fn () => Inertia::render('dashboardStudent'))
+        ->name('dashboard.student');
+
+    // 🏢 Firma
+    Route::get('/dashboard-company', fn () => Inertia::render('dashboardCompany'))
+        ->name('dashboard.company');
 });
 
 Route::post('/logout', function () {

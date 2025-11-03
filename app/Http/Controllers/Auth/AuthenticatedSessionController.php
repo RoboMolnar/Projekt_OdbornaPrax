@@ -9,42 +9,47 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
-use Inertia\Response;
+use Inertia\Response as InertiaResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Illuminate\Http\RedirectResponse;
 
 class AuthenticatedSessionController extends Controller
 {
-    public function create(): Response
+    public function create(): InertiaResponse
     {
-        return Inertia::render('auth/login'); // resources/js/pages/auth/login.tsx
+        // resources/js/pages/auth/login.tsx
+        return Inertia::render('auth/login');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): SymfonyResponse
     {
         $data = $request->validate([
-            'email'    => ['required','email'],
-            'password' => ['required','string'],
-            'remember' => ['nullable','boolean'],
+            'email'    => ['required', 'email'],
+            'password' => ['required', 'string'],
+            'remember' => ['nullable', 'boolean'],
         ]);
 
-        
-        $remember = false;
+        $remember = (bool)($data['remember'] ?? false);
 
-        // 1) študent
+        // 1) študent (guard web)
         if ($u = User::where('email', $data['email'])->first()) {
             if (Hash::check($data['password'], $u->password)) {
                 Auth::guard('web')->login($u, $remember);
                 $request->session()->regenerate();
-                return redirect()->intended(route('dashboard'));
+
+                // Full-page redirect → URL sa prepne na /dashboard
+                return Inertia::location(route('dashboard'));
             }
         }
 
-        // 2) firma
+        // 2) firma (guard company)
         if ($c = Company::where('email', $data['email'])->first()) {
             if (!empty($c->password) && Hash::check($data['password'], $c->password)) {
                 Auth::guard('company')->login($c, $remember);
                 $request->session()->regenerate();
-                return redirect()->intended(route('dashboard'));
+
+                // Full-page redirect → URL sa prepne na /dashboard
+                return Inertia::location(route('dashboard'));
             }
         }
 
