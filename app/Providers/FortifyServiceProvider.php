@@ -2,37 +2,33 @@
 
 namespace App\Providers;
 
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Fortify\Fortify;
 use Inertia\Inertia;
+use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
 {
-    public function register(): void {}
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        //
+    }
 
+    /**
+     * Bootstrap any application services.
+     */
     public function boot(): void
     {
-        // Fortify::loginView(fn () => Inertia::render('auth/login'));
-        // Fortify::registerView(fn () => Inertia::render('auth/register'));
+        Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
+        Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
 
-        Fortify::authenticateUsing(function ($request) {
-            $user = User::where('email', $request->email)->first();
-
-            if (! $user) {
-                return null;
-            }
-
-            if (! Hash::check($request->password, $user->password)) {
-                return null;
-            }
-
-            if ($user->role === 'company' && ! $user->active) {
-                return null;
-            }
-
-            return $user;
+        RateLimiter::for('two-factor', function (Request $request) {
+            return Limit::perMinute(5)->by($request->session()->get('login.id'));
         });
     }
 }

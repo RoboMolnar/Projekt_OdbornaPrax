@@ -1,7 +1,6 @@
 <?php
 
 use Laravel\Fortify\Features;
-use SebastianBergmann\Type\TrueType;
 
 return [
 
@@ -87,7 +86,7 @@ return [
     |
     */
 
-    'prefix' => 'fortify',
+    'prefix' => '',
 
     'domain' => null,
 
@@ -117,7 +116,7 @@ return [
 
     'limiters' => [
         'login' => 'login',
-        //'two-factor' => 'two-factor',
+        'two-factor' => 'two-factor',
     ],
 
     /*
@@ -131,7 +130,7 @@ return [
     |
     */
 
-    'views' => false,
+    'views' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -150,11 +149,11 @@ return [
         // Features::emailVerification(),
         // Features::updateProfileInformation(),
         // Features::updatePasswords(),
-        /*Features::twoFactorAuthentication([
+        Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,
-             'window' => 0
-        ],*/
+            // 'window' => 0
+        ]),
     ],
 
 ];

@@ -2,55 +2,50 @@
 
 namespace App\Models;
 
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Hash;
+use Laravel\Fortify\TwoFactorAuthenticatable;
 
 class User extends Authenticatable
 {
-    use Notifiable;
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable, TwoFactorAuthenticatable;
 
-    protected $table = 'users';
-    protected $primaryKey = 'user_id';
-    public $incrementing = true;
-    protected $keyType = 'int';
-    public $timestamps = true;
-
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
     protected $fillable = [
-        'role',                 // 'student' | 'garant' | 'company' | 'admin'
+        'name',
         'email',
         'password',
-        'first_name',
-        'last_name',
-        'phone_number',         // <- toto musí sedieť s DB
-        'address_id',
-        'department_id',
-        'field_of_study_id',
-        'company_id',
-        'active',               // ak má default, nemusíš posielať
-        'title',
-        'year_of_study',
-        'study_type',
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
     protected $hidden = [
         'password',
-        'remember_token',
         'two_factor_secret',
-        'two_factor_recovery_codes',
+        'two_factory_recovery_codes',
+        'remember_token',
     ];
 
-    // automaticky hashni heslo, aj keby si na to zabudol v kontroleri
-    public function setPasswordAttribute($value)
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
     {
-        // iba ak už nie je zahashované
-        $this->attributes['password'] = Hash::needsRehash($value)
-            ? Hash::make($value)
-            : $value;
-    }
-
-    public function company()
-    {
-        return $this->belongsTo(Company::class, 'company_id', 'company_id');
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
     }
 }
