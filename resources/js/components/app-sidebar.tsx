@@ -23,12 +23,7 @@ const mainNavItems: NavItem[] = [
   },
   {
     title: 'Dashboard študenta',
-    href: '/dashboard-student',
-    icon: LayoutGrid,
-  },
-  {
-    title: 'Dashboard firmy',
-    href: '/dashboard-company',
+    href: '/dashboard-student', 
     icon: LayoutGrid,
   },
 ];
@@ -54,7 +49,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser />
+        <NavUser /> {/* necháme používateľa */}
       </SidebarFooter>
     </Sidebar>
   );
