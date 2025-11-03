@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Fortify\Fortify;
 use Inertia\Inertia;
@@ -14,25 +12,8 @@ class FortifyServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Fortify::loginView(fn () => Inertia::render('auth/login'));
-        // Fortify::registerView(fn () => Inertia::render('auth/register'));
-
-        Fortify::authenticateUsing(function ($request) {
-            $user = User::where('email', $request->email)->first();
-
-            if (! $user) {
-                return null;
-            }
-
-            if (! Hash::check($request->password, $user->password)) {
-                return null;
-            }
-
-            if ($user->role === 'company' && ! $user->active) {
-                return null;
-            }
-
-            return $user;
-        });
+        // Fortify beží na /fortify/login a /fortify/register, UI je rovnaké (Inertia)
+        //Fortify::loginView(fn () => Inertia::render('auth/login'));
+        //Fortify::registerView(fn () => Inertia::render('auth/register'));
     }
 }

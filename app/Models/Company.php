@@ -2,24 +2,21 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 
-class Company extends Model
+class Company extends Authenticatable
 {
+    use Notifiable;
+
     protected $table = 'company';
-    protected $primaryKey = 'company_id';
-    public $timestamps = true;
+    protected $primaryKey = 'idcompany';
+    public $timestamps = false;
 
     protected $fillable = [
-        'company_name',
-        'ico',
-        'dic',
-        'email',
-        'password',
-        'phone_contact',
-        'responsible_person',
-        'address_id',
+        'name','ICO','DIC','email','password',
+        'phone_contact','responsible_person','street','city','country','postal_code',
     ];
 
-    protected $hidden = ['password'];
+    protected $hidden = ['password','remember_token'];
 }

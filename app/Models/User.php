@@ -4,53 +4,18 @@ namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Hash;
 
 class User extends Authenticatable
 {
     use Notifiable;
 
-    protected $table = 'users';
-    protected $primaryKey = 'user_id';
-    public $incrementing = true;
-    protected $keyType = 'int';
-    public $timestamps = true;
+    protected $table = 'student';
+    protected $primaryKey = 'idstudent';
+    public $timestamps = false;
 
     protected $fillable = [
-        'role',                 // 'student' | 'garant' | 'company' | 'admin'
-        'email',
-        'password',
-        'first_name',
-        'last_name',
-        'phone_number',         // <- toto musí sedieť s DB
-        'address_id',
-        'department_id',
-        'field_of_study_id',
-        'company_id',
-        'active',               // ak má default, nemusíš posielať
-        'title',
-        'year_of_study',
-        'study_type',
+        'name','email','password','year','title','study_type','major',
     ];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-        'two_factor_secret',
-        'two_factor_recovery_codes',
-    ];
-
-    // automaticky hashni heslo, aj keby si na to zabudol v kontroleri
-    public function setPasswordAttribute($value)
-    {
-        // iba ak už nie je zahashované
-        $this->attributes['password'] = Hash::needsRehash($value)
-            ? Hash::make($value)
-            : $value;
-    }
-
-    public function company()
-    {
-        return $this->belongsTo(Company::class, 'company_id', 'company_id');
-    }
+    protected $hidden = ['password','remember_token'];
 }
