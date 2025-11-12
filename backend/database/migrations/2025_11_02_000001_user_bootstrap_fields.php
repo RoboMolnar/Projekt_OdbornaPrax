@@ -13,11 +13,13 @@ return new class extends Migration {
             if (!Schema::hasColumn('users','must_change_password')) {
                 $table->boolean('must_change_password')->default(true)->after('password');
             }
-            if (!Schema::hasColumn('users','is_active')) {
-                $table->boolean('is_active')->default(true)->after('remember_token'); // študent = true, firma sa nastaví na false pri registrácii firmy
+            // Používame len stĺpec 'active' (nie 'is_active') pre konzistenciu s kódom
+            if (!Schema::hasColumn('users','active')) {
+                // Nepoužívaj 'after("remember_token")' kvôli starším schémam bez tohto stĺpca
+                $table->boolean('active')->default(true);
             }
             if (!Schema::hasColumn('users','activated_at')) {
-                $table->timestamp('activated_at')->nullable()->after('is_active');
+                $table->timestamp('activated_at')->nullable();
             }
         });
     }
@@ -25,7 +27,7 @@ return new class extends Migration {
     public function down(): void {
         Schema::table('users', function (Blueprint $table) {
             if (Schema::hasColumn('users','activated_at')) $table->dropColumn('activated_at');
-            if (Schema::hasColumn('users','is_active')) $table->dropColumn('is_active');
+            if (Schema::hasColumn('users','active')) $table->dropColumn('active');
             if (Schema::hasColumn('users','must_change_password')) $table->dropColumn('must_change_password');
         });
     }

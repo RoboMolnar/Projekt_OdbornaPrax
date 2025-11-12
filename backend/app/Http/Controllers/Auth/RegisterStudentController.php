@@ -34,7 +34,11 @@ class RegisterStudentController extends Controller
             'must_change_password' => 1,
         ]);
 
-        Mail::to($user->email)->send(new InitialPasswordMail($user, $plain));
+        try {
+            Mail::to($user->email)->send(new InitialPasswordMail($user, $plain));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json(['message' => 'Študent zaregistrovaný. Dočasné heslo odoslané.'], 201);
     }

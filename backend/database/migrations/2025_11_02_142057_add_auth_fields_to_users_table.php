@@ -15,12 +15,13 @@ return new class extends Migration {
 
             // boolean - či je účet aktívny (študent áno, firma nie po registrácii)
             if (!Schema::hasColumn('users', 'active')) {
-                $table->boolean('active')->default(true)->after('remember_token');
+                // Nepoužívaj 'after("remember_token")' kvôli starším schémam bez tohto stĺpca
+                $table->boolean('active')->default(true);
             }
 
             // čas aktivácie (firma po kliknutí na aktivačný e-mail)
             if (!Schema::hasColumn('users', 'activated_at')) {
-                $table->timestamp('activated_at')->nullable()->after('active');
+                $table->timestamp('activated_at')->nullable();
             }
         });
     }

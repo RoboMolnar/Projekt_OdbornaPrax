@@ -41,7 +41,11 @@ class RegisterCompanyController extends Controller
             ['user' => $user->user_id] // primárny kľúč user_id
         );
 
-        Mail::to($user->email)->send(new CompanyActivationMail($user, $plain, $activationUrl));
+        try {
+            Mail::to($user->email)->send(new CompanyActivationMail($user, $plain, $activationUrl));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json(['message' => 'Firma zaregistrovaná. Poslali sme aktivačný e-mail.'], 201);
     }
