@@ -2,6 +2,9 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\InternshipController;
+
+
 
 Route::get('/health', function () {
     return response()->json([
@@ -33,3 +36,15 @@ Route::post('/register/company', [\App\Http\Controllers\Auth\RegisterCompanyCont
 // Force password change flow
 Route::middleware('auth:sanctum')->get('/password/force-change-check', [\App\Http\Controllers\Api\PasswordController::class, 'check']);
 Route::middleware('auth:sanctum')->post('/password/force-change', [\App\Http\Controllers\Api\PasswordController::class, 'update']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/student/internships', [InternshipController::class, 'index']);
+    Route::post('/student/internships', [InternshipController::class, 'store']);
+});
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/student/internships', [InternshipController::class, 'index']);
+    Route::post('/student/internships', [InternshipController::class, 'store']);
+    Route::get('/student/internships/{internship}', [InternshipController::class, 'show']);
+});

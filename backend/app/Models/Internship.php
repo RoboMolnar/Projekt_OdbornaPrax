@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\InternshipState;
 
 class Internship extends Model
 {
@@ -14,12 +15,13 @@ class Internship extends Model
         'student_user_id',
         'garant_user_id',
         'company_id',
-        'state_id',
         'start_date',
         'end_date',
-        'hours_total',
-        'hours_completed',
-        'notes',
+        'year',
+        'semester',
+        'worked_hours',
+        'grade',
+        'state_id',
     ];
 
     public function student()
@@ -38,7 +40,8 @@ class Internship extends Model
     }
 
     public function state()
-    {
-        return $this->belongsTo(InternshipState::class, 'state_id', 'state_id');
-    }
+{
+    return $this->belongsTo(InternshipState::class, 'state_id', 'internship_state_id');
+}
+
 }
