@@ -670,6 +670,7 @@ class ComposerStaticInitfda2738d59fade9320638be36e9ae642
 
     public static $classMap = array (
         'App\\Http\\Controllers\\Api\\AuthController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/AuthController.php',
+        'App\\Http\\Controllers\\Api\\InternshipController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/InternshipController.php',
         'App\\Http\\Controllers\\Api\\PasswordController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/PasswordController.php',
         'App\\Http\\Controllers\\Auth\\AuthenticatedSessionController' => __DIR__ . '/../..' . '/app/Http/Controllers/Auth/AuthenticatedSessionController.php',
         'App\\Http\\Controllers\\Auth\\EmailVerificationNotificationController' => __DIR__ . '/../..' . '/app/Http/Controllers/Auth/EmailVerificationNotificationController.php',
@@ -694,9 +695,11 @@ class ComposerStaticInitfda2738d59fade9320638be36e9ae642
         'App\\Http\\Requests\\Settings\\TwoFactorAuthenticationRequest' => __DIR__ . '/../..' . '/app/Http/Requests/Settings/TwoFactorAuthenticationRequest.php',
         'App\\Mail\\CompanyActivationMail' => __DIR__ . '/../..' . '/app/Mail/CompanyActivationMail.php',
         'App\\Mail\\InitialPasswordMail' => __DIR__ . '/../..' . '/app/Mail/InitialPasswordMail.php',
+        'App\\Models\\Address' => __DIR__ . '/../..' . '/app/Models/Address.php',
         'App\\Models\\Company' => __DIR__ . '/../..' . '/app/Models/Company.php',
         'App\\Models\\Garant' => __DIR__ . '/../..' . '/app/Models/Garant.php',
         'App\\Models\\Internship' => __DIR__ . '/../..' . '/app/Models/Internship.php',
+        'App\\Models\\InternshipState' => __DIR__ . '/../..' . '/app/Models/InternshipState.php',
         'App\\Models\\User' => __DIR__ . '/../..' . '/app/Models/User.php',
         'App\\Providers\\AppServiceProvider' => __DIR__ . '/../..' . '/app/Providers/AppServiceProvider.php',
         'App\\Providers\\FortifyServiceProvider' => __DIR__ . '/../..' . '/app/Providers/FortifyServiceProvider.php',

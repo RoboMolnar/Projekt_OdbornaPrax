@@ -3,8 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\InternshipController;
-
-
+use App\Http\Controllers\Api\GarantInternshipController;
 
 Route::get('/health', function () {
     return response()->json([
@@ -25,15 +24,12 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     ]);
 });
 
-// Token-based auth endpoints
 Route::post('/login', [\App\Http\Controllers\Api\AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
 
-// Registration via API (no cookies/CSRF)
 Route::post('/register/student', [\App\Http\Controllers\Auth\RegisterStudentController::class, 'store']);
 Route::post('/register/company', [\App\Http\Controllers\Auth\RegisterCompanyController::class, 'store']);
 
-// Force password change flow
 Route::middleware('auth:sanctum')->get('/password/force-change-check', [\App\Http\Controllers\Api\PasswordController::class, 'check']);
 Route::middleware('auth:sanctum')->post('/password/force-change', [\App\Http\Controllers\Api\PasswordController::class, 'update']);
 
@@ -42,9 +38,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/student/internships', [InternshipController::class, 'store']);
 });
 
-
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/student/internships', [InternshipController::class, 'index']);
     Route::post('/student/internships', [InternshipController::class, 'store']);
     Route::get('/student/internships/{internship}', [InternshipController::class, 'show']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/garant/internships', [GarantInternshipController::class, 'indexAll']);
+    Route::get('/garant/internships/{internship}', [GarantInternshipController::class, 'show']);
+    Route::post('/garant/internships/{internship}/approve', [GarantInternshipController::class, 'approve']);
+    Route::post('/garant/internships/{internship}/reject', [GarantInternshipController::class, 'reject']);
+    Route::post('/garant/internships/{internship}/grade', [GarantInternshipController::class, 'grade']);
+    Route::patch('/garant/internships/{internship}/state', [GarantInternshipController::class, 'setState']);
+    Route::delete('/garant/internships/{internship}', [GarantInternshipController::class, 'destroy']);
 });

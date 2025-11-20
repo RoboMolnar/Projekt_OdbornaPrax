@@ -7,6 +7,7 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'App\\Http\\Controllers\\Api\\AuthController' => $baseDir . '/app/Http/Controllers/Api/AuthController.php',
+    'App\\Http\\Controllers\\Api\\InternshipController' => $baseDir . '/app/Http/Controllers/Api/InternshipController.php',
     'App\\Http\\Controllers\\Api\\PasswordController' => $baseDir . '/app/Http/Controllers/Api/PasswordController.php',
     'App\\Http\\Controllers\\Auth\\AuthenticatedSessionController' => $baseDir . '/app/Http/Controllers/Auth/AuthenticatedSessionController.php',
     'App\\Http\\Controllers\\Auth\\EmailVerificationNotificationController' => $baseDir . '/app/Http/Controllers/Auth/EmailVerificationNotificationController.php',
@@ -31,9 +32,11 @@ return array(
     'App\\Http\\Requests\\Settings\\TwoFactorAuthenticationRequest' => $baseDir . '/app/Http/Requests/Settings/TwoFactorAuthenticationRequest.php',
     'App\\Mail\\CompanyActivationMail' => $baseDir . '/app/Mail/CompanyActivationMail.php',
     'App\\Mail\\InitialPasswordMail' => $baseDir . '/app/Mail/InitialPasswordMail.php',
+    'App\\Models\\Address' => $baseDir . '/app/Models/Address.php',
     'App\\Models\\Company' => $baseDir . '/app/Models/Company.php',
     'App\\Models\\Garant' => $baseDir . '/app/Models/Garant.php',
     'App\\Models\\Internship' => $baseDir . '/app/Models/Internship.php',
+    'App\\Models\\InternshipState' => $baseDir . '/app/Models/InternshipState.php',
     'App\\Models\\User' => $baseDir . '/app/Models/User.php',
     'App\\Providers\\AppServiceProvider' => $baseDir . '/app/Providers/AppServiceProvider.php',
     'App\\Providers\\FortifyServiceProvider' => $baseDir . '/app/Providers/FortifyServiceProvider.php',
