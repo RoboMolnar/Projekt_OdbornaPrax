@@ -6,6 +6,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\FieldOfStudy;
 
 class User extends Authenticatable
 {
@@ -48,6 +49,12 @@ class User extends Authenticatable
         $this->attributes['password'] = Hash::needsRehash($value)
             ? Hash::make($value)
             : $value;
+    }
+
+    public function fieldOfStudy()
+    {
+        // users.field_of_study_id -> field_of_study.field_of_study_id
+        return $this->belongsTo(FieldOfStudy::class, 'field_of_study_id', 'field_of_study_id');
     }
 
     public function company()

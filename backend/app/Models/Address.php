@@ -16,4 +16,9 @@ class Address extends Model
         'zip',
         'country',
     ];
+
+    public function companies()
+    {
+        return $this->hasMany(Company::class, 'address_id', 'address_id');
+    }
 }
