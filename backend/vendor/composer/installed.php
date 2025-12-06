@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'laravel/react-starter-kit',
-        'pretty_version' => 'dev-feature-login/test',
-        'version' => 'dev-feature-login/test',
-        'reference' => '1ae35057a3ce02706601611daa230fb74ecc491d',
+        'pretty_version' => 'dev-feature-database',
+        'version' => 'dev-feature-database',
+        'reference' => 'f60687fd5d5b90afa92b2ccbeb14a26319526918',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -509,9 +509,9 @@
             'dev_requirement' => false,
         ),
         'laravel/react-starter-kit' => array(
-            'pretty_version' => 'dev-feature-login/test',
-            'version' => 'dev-feature-login/test',
-            'reference' => '1ae35057a3ce02706601611daa230fb74ecc491d',
+            'pretty_version' => 'dev-feature-database',
+            'version' => 'dev-feature-database',
+            'reference' => 'f60687fd5d5b90afa92b2ccbeb14a26319526918',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
