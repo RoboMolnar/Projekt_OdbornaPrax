@@ -51,7 +51,6 @@ export default function DashboardStudent() {
     worked_hours: '',
   });
 
-  // stav pre detail praxe (náš vlastný modal)
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -98,7 +97,6 @@ export default function DashboardStudent() {
         worked_hours: form.worked_hours ? Number(form.worked_hours) : undefined,
       });
 
-      // vyčistenie formulára
       setForm((prev) => ({
         ...prev,
         company_name: '',
@@ -110,9 +108,7 @@ export default function DashboardStudent() {
         worked_hours: '',
       }));
 
-      // znova načítať praxe z DB
       await loadPractices();
-      // po uložení formulár skryť
       setShowForm(false);
     } catch (e) {
       setFormError('Prax sa nepodarilo uložiť. Skontroluj údaje alebo skús neskôr.');
@@ -143,19 +139,19 @@ export default function DashboardStudent() {
     <AppLayoutSpa breadcrumbs={breadcrumbs}>
       <div className="space-y-6">
         {/* sivý rámik a jemný tieň */}
-        <Card className="bg-white/90 border border-slate-200 shadow-sm">
+        <Card className="bg-white/90 border border-green-200 shadow-sm">
           {/* HLAVIČKA S TLAČIDLOM "NOVÁ PRAX" */}
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <CardTitle>Moje praxe</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">
+              <CardTitle className="text-green-700">Moje praxe</CardTitle>
+              <p className="mt-1 text-sm text-green-700">
                 Tu vidíš prehľad svojich odborných praxí a môžeš pridať novú.
               </p>
             </div>
             <Button
               type="button"
               onClick={() => setShowForm((prev) => !prev)}
-              className="bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 hover:shadow-md transition-all duration-200"
+              className="bg-green-700 text-white shadow-sm hover:bg-green-800 hover:shadow-md transition-all duration-200"
             >
               Nová prax
             </Button>
@@ -164,13 +160,15 @@ export default function DashboardStudent() {
           <CardContent>
             {/* ROZBAĽOVACÍ FORMULÁR POD HLAVIČKOU */}
             {showForm && (
-              <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <h2 className="mb-3 text-sm font-semibold text-slate-700">
+              <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+                <h2 className="mb-3 text-sm font-semibold text-green-800">
                   Pridať novú prax
                 </h2>
                 <form className="space-y-4" onSubmit={handleSubmit}>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Názov firmy *</label>
+                    <label className="block text-sm font-medium mb-1 text-green-800">
+                      Názov firmy *
+                    </label>
                     <Input
                       name="company_name"
                       value={form.company_name}
@@ -181,7 +179,9 @@ export default function DashboardStudent() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Ulica</label>
+                    <label className="block text-sm font-medium mb-1 text-green-800">
+                      Ulica
+                    </label>
                     <Input
                       name="street"
                       value={form.street}
@@ -192,7 +192,9 @@ export default function DashboardStudent() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Mesto *</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Mesto *
+                      </label>
                       <Input
                         name="city"
                         value={form.city}
@@ -201,7 +203,9 @@ export default function DashboardStudent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">PSČ</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        PSČ
+                      </label>
                       <Input
                         name="zip"
                         value={form.zip}
@@ -210,7 +214,9 @@ export default function DashboardStudent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Štát</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Štát
+                      </label>
                       <Input
                         name="country"
                         value={form.country}
@@ -221,7 +227,9 @@ export default function DashboardStudent() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Dátum začiatku *</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Dátum začiatku *
+                      </label>
                       <Input
                         type="date"
                         name="start_date"
@@ -231,7 +239,9 @@ export default function DashboardStudent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Dátum konca *</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Dátum konca *
+                      </label>
                       <Input
                         type="date"
                         name="end_date"
@@ -244,7 +254,9 @@ export default function DashboardStudent() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Rok *</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Rok *
+                      </label>
                       <Input
                         type="number"
                         name="year"
@@ -254,7 +266,9 @@ export default function DashboardStudent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Semester *</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Semester *
+                      </label>
                       <select
                         name="semester"
                         value={form.semester}
@@ -266,7 +280,9 @@ export default function DashboardStudent() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Odpracované hodiny</label>
+                      <label className="block text-sm font-medium mb-1 text-green-800">
+                        Odpracované hodiny
+                      </label>
                       <Input
                         type="number"
                         name="worked_hours"
@@ -299,14 +315,12 @@ export default function DashboardStudent() {
               </div>
             )}
 
-            {/* CHYBA PRI NAČÍTANÍ ZOZNAMU */}
             {listError && (
               <p className="mb-3 text-sm text-red-600">
                 {listError}
               </p>
             )}
 
-            {/* TABUĽKA S PRAXAMI Z DATABÁZY */}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -332,8 +346,8 @@ export default function DashboardStudent() {
                 )}
 
                 {!loading && practices.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{p.firm}</TableCell>
+                  <TableRow key={p.id} className="hover:bg-green-50">
+                    <TableCell className="text-green-900">{p.firm}</TableCell>
                     <TableCell>{p.year}</TableCell>
                     <TableCell>
                       <Badge>{p.status}</Badge>
@@ -358,18 +372,18 @@ export default function DashboardStudent() {
       {/* NÁŠ VLASTNÝ MODAL S DETAILOM PRAXE */}
       {detailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-slate-200 p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-green-200 p-6">
+            <div className="flex items-start justify_between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Detail praxe</h2>
-                <p className="text-sm text-slate-500">
+                <h2 className="text-lg font-semibold text-green-900">Detail praxe</h2>
+                <p className="text-sm text-green-700">
                   Podrobné informácie o tvojej odbornej praxi.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeDetail}
-                className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                className="text-green-400 hover:text-green-600 text-xl leading-none"
               >
                 ×
               </button>
@@ -377,7 +391,7 @@ export default function DashboardStudent() {
 
             <div className="mt-4 text-sm">
               {detailLoading && (
-                <p className="text-slate-500">Načítavam…</p>
+                <p className="text-green-700">Načítavam…</p>
               )}
 
               {detailError && (
@@ -387,20 +401,20 @@ export default function DashboardStudent() {
               {!detailLoading && !detailError && selectedPractice && (
                 <div className="space-y-3">
                   <div>
-                    <p className="font-semibold text-slate-700">Firma</p>
-                    <p className="text-slate-900">
+                    <p className="font-semibold text-green-800">Firma</p>
+                    <p className="text-green-900">
                       {selectedPractice.company_name || '—'}
                     </p>
                   </div>
 
                   <div>
-                    <p className="font-semibold text-slate-700">Adresa</p>
-                    <p className="text-slate-900">
+                    <p className="font-semibold text-green-800">Adresa</p>
+                    <p className="text-green-900">
                       {[selectedPractice.street, selectedPractice.city]
                         .filter(Boolean)
                         .join(', ') || '—'}
                     </p>
-                    <p className="text-slate-900">
+                    <p className="text-green-900">
                       {[selectedPractice.zip, selectedPractice.country]
                         .filter(Boolean)
                         .join(' ') || ''}
@@ -409,34 +423,34 @@ export default function DashboardStudent() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="font-semibold text-slate-700">Dátum začiatku</p>
-                      <p className="text-slate-900">{selectedPractice.start_date}</p>
+                      <p className="font-semibold text-green-800">Dátum začiatku</p>
+                      <p className="text-green-900">{selectedPractice.start_date}</p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Dátum konca</p>
-                      <p className="text-slate-900">{selectedPractice.end_date}</p>
+                      <p className="font-semibold text-green-800">Dátum konca</p>
+                      <p className="text-green-900">{selectedPractice.end_date}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <p className="font-semibold text-slate-700">Rok</p>
-                      <p className="text-slate-900">{selectedPractice.year}</p>
+                      <p className="font-semibold text-green-800">Rok</p>
+                      <p className="text-green-900">{selectedPractice.year}</p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Semester</p>
-                      <p className="text-slate-900">{selectedPractice.semester}</p>
+                      <p className="font-semibold text-green-800">Semester</p>
+                      <p className="text-green-900">{selectedPractice.semester}</p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Odpracované hodiny</p>
-                      <p className="text-slate-900">
+                      <p className="font-semibold text-green-800">Odpracované hodiny</p>
+                      <p className="text-green-900">
                         {selectedPractice.worked_hours ?? '—'}
                       </p>
                     </div>
                   </div>
 
                   <div>
-                    <p className="font-semibold text-slate-700">Stav</p>
+                    <p className="font-semibold text-green-800">Stav</p>
                     <Badge className="mt-1">
                       {selectedPractice.status ?? '—'}
                     </Badge>

@@ -32,22 +32,20 @@ type PracticeDetail = {
   semester: string | number;
   worked_hours: number | null;
   status: string;
-  // špeciálne pre firmu – z CompanyInternshipController@show
   garant_email: string | null;
 };
 
 type Filter = { status: string; year: string; search: string; program: string };
 
 const STATUS_CLASSES: Record<string, string> = {
-  Vytvorená: 'border-slate-300 text-slate-700 bg-slate-50',
-  Schválená: 'border-indigo-300 text-indigo-700 bg-indigo-50',
+  Vytvorená: 'border-green-300 text-green-700 bg-green-50',
+  Schválená: 'border-green-500 text-green-800 bg-green-100',
   Obhájená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
-  Neobhájená: 'border-rose-300 text-rose-700 bg-rose-50',
-  Zamietnutá: 'border-rose-300 text-rose-700 bg-rose-50',
+  Neobhájená: 'border-red-300 text-red-700 bg-red-50',
+  Zamietnutá: 'border-red-300 text-red-700 bg-red-50',
 };
 
 const ALL_STATES = ['Vytvorená', 'Schválená', 'Zamietnutá', 'Obhájená', 'Neobhájená'] as const;
-
 const breadcrumbs = [{ title: 'Dashboard firmy', href: '/dashboard-company' }];
 
 export default function DashboardCompany() {
@@ -68,15 +66,13 @@ export default function DashboardCompany() {
   const [selected, setSelected] = useState<PracticeDetail | null>(null);
 
   const [searchInput, setSearchInput] = useState('');
-  const [pendingState, setPendingState] = useState<string>(''); // pre dropdown v detaile
+  const [pendingState, setPendingState] = useState<string>('');
 
-  // stav pre kontaktovanie garanta
   const [contactMessage, setContactMessage] = useState('');
   const [contactSending, setContactSending] = useState(false);
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
 
-  // debounce search input -> filter.search
   useEffect(() => {
     const t = setTimeout(() => setFilter((f) => ({ ...f, search: searchInput })), 300);
     return () => clearTimeout(t);
@@ -109,7 +105,6 @@ export default function DashboardCompany() {
 
   useEffect(() => {
     loadRows();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.status, filter.year, filter.program, filter.search]);
 
   async function openDetail(id: number) {
@@ -125,7 +120,7 @@ export default function DashboardCompany() {
     try {
       const res = await api.get<PracticeDetail>(`/api/company/internships/${id}`);
       setSelected(res.data);
-      setPendingState(res.data.status); // predvyplniť aktuálny stav v dropdown-e
+      setPendingState(res.data.status);
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'Nepodarilo sa načítať detail praxe.';
       setDetailError(msg);
@@ -144,7 +139,6 @@ export default function DashboardCompany() {
     setContactSuccess(null);
   }
 
-  // ⬇⬇⬇ Akcie – firma má rovnaké možnosti ako garant ⬇⬇⬇
   async function approve(id: number) {
     try {
       await api.post(`/api/company/internships/${id}/approve`);
@@ -236,10 +230,10 @@ export default function DashboardCompany() {
   return (
     <AppLayoutSpa breadcrumbs={breadcrumbs}>
       <div className="grid grid-cols-1 gap-4">
-        <Card>
+        <Card className="border border-green-400 bg-white/90 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div>
-              <CardTitle>Prehľad praxí vo firme</CardTitle>
+              <CardTitle className="text-green-800">Prehľad praxí vo firme</CardTitle>
             </div>
           </CardHeader>
 
@@ -250,11 +244,12 @@ export default function DashboardCompany() {
                   placeholder="Hľadať študenta alebo odbor"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
+                  className="border-green-300 focus:ring-green-500"
                 />
               </div>
 
               <select
-                className="border rounded-md px-3 py-2 text-sm"
+                className="border-green-300 text-green-800 rounded-md px-3 py-2 text-sm"
                 value={filter.status}
                 onChange={(e) => setFilter({ ...filter, status: e.target.value })}
               >
@@ -267,7 +262,7 @@ export default function DashboardCompany() {
               </select>
 
               <select
-                className="border rounded-md px-3 py-2 text-sm"
+                className="border-green-300 text-green-800 rounded-md px-3 py-2 text-sm"
                 value={filter.year}
                 onChange={(e) => setFilter({ ...filter, year: e.target.value })}
               >
@@ -280,7 +275,7 @@ export default function DashboardCompany() {
               </select>
 
               <select
-                className="border rounded-md px-3 py-2 text-sm"
+                className="border-green-300 text-green-800 rounded-md px-3 py-2 text-sm"
                 value={filter.program}
                 onChange={(e) => setFilter({ ...filter, program: e.target.value })}
               >
@@ -318,52 +313,71 @@ export default function DashboardCompany() {
                   )}
                   {!loading &&
                     rows.map((r) => (
-                      <TableRow key={r.id} className="hover:bg-slate-50">
+                      <TableRow key={r.id} className="hover:bg-green-50">
                         <TableCell>
-                          <span className="text-slate-900">{r.student || '—'}</span>
+                          <span className="text-green-900">{r.student || '—'}</span>
                         </TableCell>
                         <TableCell>{r.program ?? '—'}</TableCell>
                         <TableCell>{r.year}</TableCell>
                         <TableCell>
-                          <Badge className={STATUS_CLASSES[r.status] || 'border-slate-300'}>
+                          <Badge className={STATUS_CLASSES[r.status] || 'border-green-300'}>
                             {r.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right space-x-2">
                           {r.status === 'Vytvorená' && (
                             <>
-                              <Button size="sm" onClick={() => approve(r.id)}>
+                              <Button
+                                size="sm"
+                                className="bg-green-700 hover:bg-green-800 text-white"
+                                onClick={() => approve(r.id)}
+                              >
                                 Schváliť
                               </Button>
                               <Button
                                 size="sm"
                                 variant="secondary"
+                                className="bg-green-100 text-green-800 hover:bg-green-200"
                                 onClick={() => reject(r.id)}
                               >
                                 Zamietnuť
                               </Button>
                             </>
                           )}
+
                           {r.status === 'Schválená' && (
                             <>
-                              <Button size="sm" onClick={() => grade(r.id, true)}>
+                              <Button
+                                size="sm"
+                                className="bg-green-700 hover:bg-green-800 text-white"
+                                onClick={() => grade(r.id, true)}
+                              >
                                 Ohodnotiť: Prešiel
                               </Button>
                               <Button
                                 size="sm"
                                 variant="secondary"
+                                className="bg-green-100 text-green-800 hover:bg-green-200"
                                 onClick={() => grade(r.id, false)}
                               >
                                 Neprešiel
                               </Button>
                             </>
                           )}
-                          <Button size="sm" variant="ghost" onClick={() => openDetail(r.id)}>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-green-700 hover:bg-green-100"
+                            onClick={() => openDetail(r.id)}
+                          >
                             Detail
                           </Button>
+
                           <Button
                             size="sm"
                             variant="destructive"
+                            className="bg-red-600 hover:bg-red-700 text-white"
                             onClick={() => removeInternship(r.id)}
                           >
                             Vymazať
@@ -380,12 +394,12 @@ export default function DashboardCompany() {
 
       {detailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-slate-200 p-6">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-green-200 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Detail praxe</h2>
+                <h2 className="text-lg font-semibold text-green-900">Detail praxe</h2>
                 {selected && (
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-green-600">
                     {selected.student_firstname} {selected.student_lastname} –{' '}
                     {selected.program ?? '—'}
                   </p>
@@ -393,7 +407,7 @@ export default function DashboardCompany() {
               </div>
               <button
                 type="button"
-                className="text-sm text-slate-500 hover:text-slate-800"
+                className="text-sm text-green-600 hover:text-green-800"
                 onClick={closeDetail}
               >
                 Zavrieť
@@ -407,18 +421,18 @@ export default function DashboardCompany() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="font-semibold text-slate-700">Študent</p>
-                      <p className="text-slate-900">
+                      <p className="font-semibold text-green-700">Študent</p>
+                      <p className="text-green-900">
                         {selected.student_firstname} {selected.student_lastname}
                       </p>
-                      <p className="text-slate-500">
+                      <p className="text-green-600">
                         {selected.student_email ?? 'bez emailu'}
                       </p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Firma</p>
-                      <p className="text-slate-900">{selected.company_name}</p>
-                      <p className="text-slate-500">
+                      <p className="font-semibold text-green-700">Firma</p>
+                      <p className="text-green-900">{selected.company_name}</p>
+                      <p className="text-green-600">
                         {[selected.street, selected.city, selected.zip, selected.country]
                           .filter(Boolean)
                           .join(', ') || '—'}
@@ -428,16 +442,16 @@ export default function DashboardCompany() {
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <p className="font-semibold text-slate-700">Začiatok</p>
-                      <p className="text-slate-900">{selected.start_date}</p>
+                      <p className="font-semibold text-green-700">Začiatok</p>
+                      <p className="text-green-900">{selected.start_date}</p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Koniec</p>
-                      <p className="text-slate-900">{selected.end_date}</p>
+                      <p className="font-semibold text-green-700">Koniec</p>
+                      <p className="text-green-900">{selected.end_date}</p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Rok / Sem.</p>
-                      <p className="text-slate-900">
+                      <p className="font-semibold text-green-700">Rok / Sem.</p>
+                      <p className="text-green-900">
                         {selected.year} / {selected.semester}
                       </p>
                     </div>
@@ -445,33 +459,32 @@ export default function DashboardCompany() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="font-semibold text-slate-700">Odpracované hodiny</p>
-                      <p className="text-slate-900">
+                      <p className="font-semibold text-green-700">Odpracované hodiny</p>
+                      <p className="text-green-900">
                         {selected.worked_hours ?? '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-700">Stav</p>
-                      <p className="text-slate-900">{selected.status}</p>
+                      <p className="font-semibold text-green-700">Stav</p>
+                      <p className="text-green-900">{selected.status}</p>
                     </div>
                   </div>
 
-                  {/* Kontaktovanie garanta */}
                   {selected.garant_email && (
                     <div className="border-t pt-3 mt-2 space-y-2">
-                      <p className="font-semibold text-slate-700">Kontaktovať garanta</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="font-semibold text-green-700">Kontaktovať garanta</p>
+                      <p className="text-xs text-green-600">
                         Správa bude odoslaná na: {selected.garant_email}
                       </p>
                       <textarea
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400/60"
+                        className="w-full rounded-md border border-green-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                         rows={3}
                         value={contactMessage}
                         onChange={(e) => setContactMessage(e.target.value)}
                         placeholder="Napíšte správu garantovi…"
                       />
                       {contactError && (
-                        <p className="text-xs text-rose-600">{contactError}</p>
+                        <p className="text-xs text-red-600">{contactError}</p>
                       )}
                       {contactSuccess && (
                         <p className="text-xs text-emerald-600">{contactSuccess}</p>
@@ -480,17 +493,17 @@ export default function DashboardCompany() {
                         size="sm"
                         onClick={() => sendMessageToGarant(selected.id)}
                         disabled={contactSending}
+                        className="bg-green-700 hover:bg-green-800 text-white"
                       >
                         {contactSending ? 'Odosielam…' : 'Odoslať správu garantovi'}
                       </Button>
                     </div>
                   )}
 
-                  {/* Akcie v detaile */}
-                  <div className="border-t pt-3 mt-2 flex flex-wrap gap-2">
+                  <div className="border-t pt-3 mt-2 flex flex-wrap gap=2">
                     {ALL_STATES.includes(selected.status as any) && (
                       <select
-                        className="border rounded-md px-3 py-2 text-sm"
+                        className="border-green-300 text-green-800 rounded-md px-3 py-2 text-sm"
                         value={pendingState}
                         onChange={(e) => setPendingState(e.target.value)}
                       >
@@ -507,6 +520,7 @@ export default function DashboardCompany() {
                         size="sm"
                         variant="outline"
                         onClick={() => changeState(selected.id, pendingState)}
+                        className="bg-green-100 text-green-800 hover:bg-green-200"
                       >
                         Uložiť stav
                       </Button>
@@ -514,12 +528,17 @@ export default function DashboardCompany() {
 
                     {selected.status === 'Vytvorená' && (
                       <>
-                        <Button size="sm" onClick={() => approve(selected.id)}>
+                        <Button
+                          size="sm"
+                          className="bg-green-700 hover:bg-green-800 text-white"
+                          onClick={() => approve(selected.id)}
+                        >
                           Schváliť
                         </Button>
                         <Button
                           size="sm"
                           variant="secondary"
+                          className="bg-green-100 text-green-800 hover:bg-green-200"
                           onClick={() => reject(selected.id)}
                         >
                           Zamietnuť
@@ -529,12 +548,17 @@ export default function DashboardCompany() {
 
                     {selected.status === 'Schválená' && (
                       <>
-                        <Button size="sm" onClick={() => grade(selected.id, true)}>
+                        <Button
+                          size="sm"
+                          className="bg-green-700 hover:bg-green-800 text-white"
+                          onClick={() => grade(selected.id, true)}
+                        >
                           Ohodnotiť: Prešiel
                         </Button>
                         <Button
                           size="sm"
                           variant="secondary"
+                          className="bg-green-100 text-green-800 hover:bg-green-200"
                           onClick={() => grade(selected.id, false)}
                         >
                           Neprešiel
@@ -545,6 +569,7 @@ export default function DashboardCompany() {
                     <Button
                       size="sm"
                       variant="destructive"
+                      className="bg-red-600 hover:bg-red-700 text-white"
                       onClick={() => removeInternship(selected.id)}
                     >
                       Vymazať

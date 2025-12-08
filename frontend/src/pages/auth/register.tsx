@@ -59,13 +59,13 @@ export default function Register() {
       first_name,
       last_name,
       email: data.email,
-      phone_number: data.phone || null, // backend očakáva phone_number
+      phone_number: data.phone || null,
     };
 
     if (isCompany) {
       payload.company_name = data.company_name || null;
-      payload.ico = data.ico || null; // IČO
-      payload.dic = data.dic || null; // DIČ
+      payload.ico = data.ico || null;
+      payload.dic = data.dic || null;
     }
 
     try {
@@ -82,7 +82,6 @@ export default function Register() {
     } catch (err: any) {
       const resp = err?.response?.data;
       if (resp && typeof resp === 'object') {
-        // Laravel validácia: resp.errors = { field: [msg] }
         setErrors(resp.errors || { message: [resp.message || 'Registrácia zlyhala'] });
       } else {
         setErrors({ message: ['Registrácia zlyhala'] });
@@ -93,18 +92,18 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <div className="min-h-screen flex flex-col bg-green-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <div className="flex-1 grid place-items-center p-6">
-        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <div className="w-full max-w-xl rounded-2xl border border-green-200 bg-white p-6 shadow-sm dark:bg-slate-900 dark:border-green-800">
           <button
             type="button"
             onClick={() => window.history.back()}
-            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-green-300 px-3 py-2 text-green-800 hover:bg-green-50 dark:border-green-600 dark:text-green-100 dark:hover:bg-green-900"
           >
             Späť
           </button>
 
-          <h1 className="text-2xl font-bold text-center text-blue-800 dark:text-blue-300">
+          <h1 className="text-2xl font-bold text-center text-green-700 dark:text-green-300">
             Registrácia
           </h1>
 
@@ -114,8 +113,8 @@ export default function Register() {
               onClick={() => switchType('student')}
               className={`rounded-xl px-4 py-2 border transition ${
                 type === 'student'
-                  ? 'border-slate-900 bg-slate-900 text-blue-200 dark:border-slate-700 dark:bg-slate-700'
-                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+                  ? 'border-green-700 bg-green-700 text-green-100 dark:border-green-600 dark:bg-green-600'
+                  : 'border-green-300 bg-white text-green-800 hover:bg-green-50 dark:border-green-600 dark:bg-slate-900 dark:text-green-100 dark:hover:bg-slate-800'
               }`}
             >
               Žiak
@@ -125,8 +124,8 @@ export default function Register() {
               onClick={() => switchType('company')}
               className={`rounded-xl px-4 py-2 border transition ${
                 type === 'company'
-                  ? 'border-slate-900 bg-slate-900 text-blue-200 dark:border-slate-700 dark:bg-slate-700'
-                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+                  ? 'border-green-700 bg-green-700 text-green-100 dark:border-green-600 dark:bg-green-600'
+                  : 'border-green-300 bg-white text-green-800 hover:bg-green-50 dark:border-green-600 dark:bg-slate-900 dark:text-green-100 dark:hover:bg-slate-800'
               }`}
             >
               Firma
@@ -136,12 +135,12 @@ export default function Register() {
           <form onSubmit={submit} className="mt-6 space-y-4">
             {/* Meno a priezvisko */}
             <label className="block">
-              <span className="block text-sm text-slate-700 dark:text-slate-300">
+              <span className="block text-sm text-green-900 dark:text-green-200">
                 Meno a priezvisko <span className="text-red-600">*</span>
               </span>
               <input
                 type="text"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400/60 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                className="mt-1 w-full rounded-xl border border-green-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400/60 dark:bg-slate-800 dark:border-green-700 dark:text-slate-100"
                 value={data.name}
                 onChange={(e) => setData({ ...data, name: e.target.value })}
                 required
@@ -156,12 +155,12 @@ export default function Register() {
 
             {/* Email */}
             <label className="block">
-              <span className="block text-sm text-slate-700 dark:text-slate-300">
+              <span className="block text-sm text-green-900 dark:text-green-200">
                 Email <span className="text-red-600">*</span>
               </span>
               <input
                 type="email"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400/60 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                className="mt-1 w-full rounded-xl border border-green-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400/60 dark:bg-slate-800 dark:border-green-700 dark:text-slate-100"
                 value={data.email}
                 onChange={(e) => setData({ ...data, email: e.target.value })}
                 required
@@ -173,12 +172,12 @@ export default function Register() {
 
             {/* Telefón */}
             <label className="block">
-              <span className="block text-sm text-slate-700 dark:text-slate-300">
+              <span className="block text-sm text-green-900 dark:text-green-200">
                 Telefón {isCompany && <span className="text-red-600">*</span>}
               </span>
               <input
                 type="tel"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400/60 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                className="mt-1 w-full rounded-xl border border-green-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400/60 dark:bg-slate-800 dark:border-green-700 dark:text-slate-100"
                 value={data.phone}
                 onChange={(e) => setData({ ...data, phone: e.target.value })}
                 required={isCompany}
@@ -192,12 +191,12 @@ export default function Register() {
             {isCompany && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <label className="block">
-                  <span className="block text-sm text-slate-700 dark:text-slate-300">
+                  <span className="block text-sm text-green-900 dark:text-green-200">
                     Názov firmy
                   </span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400/60 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    className="mt-1 w-full rounded-xl border border-green-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400/60 dark:bg-slate-800 dark:border-green-700 dark:text-slate-100"
                     value={data.company_name || ''}
                     onChange={(e) =>
                       setData({ ...data, company_name: e.target.value })
@@ -211,12 +210,12 @@ export default function Register() {
                 </label>
 
                 <label className="block">
-                  <span className="block text-sm text-slate-700 dark:text-slate-300">
+                  <span className="block text-sm text-green-900 dark:text-green-200">
                     IČO <span className="text-red-600">*</span>
                   </span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400/60 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    className="mt-1 w-full rounded-xl border border-green-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400/60 dark:bg-slate-800 dark:border-green-700 dark:text-slate-100"
                     value={data.ico || ''}
                     onChange={(e) => setData({ ...data, ico: e.target.value })}
                     required
@@ -227,12 +226,12 @@ export default function Register() {
                 </label>
 
                 <label className="block">
-                  <span className="block text-sm text-slate-700 dark:text-slate-300">
+                  <span className="block text-sm text-green-900 dark:text-green-200">
                     DIČ <span className="text-red-600">*</span>
                   </span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400/60 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    className="mt-1 w-full rounded-xl border border-green-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400/60 dark:bg-slate-800 dark:border-green-700 dark:text-slate-100"
                     value={data.dic || ''}
                     onChange={(e) => setData({ ...data, dic: e.target.value })}
                     required
@@ -250,7 +249,7 @@ export default function Register() {
 
             <button
               disabled={processing}
-              className="w-full rounded-xl px-4 py-2 bg-slate-900 text-white hover:shadow disabled:opacity-50 dark:bg-slate-700"
+              className="w-full rounded-xl px-4 py-2 bg-green-700 text-white hover:shadow disabled:opacity-50 dark:bg-green-600"
             >
               {processing ? 'Odosielam…' : 'Registrovať'}
             </button>
