@@ -10,7 +10,7 @@ váš účet bol úspešne vytvorený.
 
 Po prihlásení budete vyzvaní na **zmenu hesla**.
 
-@component('mail::button', ['url' => config('app.url') . '/login'])
+@component('mail::button', ['url' => rtrim(env('FRONTEND_URL', config('app.url')), '/') . '/login'])
 Prejsť na prihlásenie
 @endcomponent
 

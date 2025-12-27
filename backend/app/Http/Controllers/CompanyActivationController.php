@@ -18,11 +18,11 @@ class CompanyActivationController extends Controller
         }
 
         if ($user->active) {
-            return redirect('/login')->with('status', 'Účet je už aktivovaný.');
+            return redirect(rtrim(env('FRONTEND_URL', config('app.url')), '/') . '/login');
         }
 
         $user->update(['active' => 1]);
 
-        return redirect('/login')->with('status', 'Účet bol aktivovaný. Môžete sa prihlásiť.');
+        return redirect(rtrim(env('FRONTEND_URL', config('app.url')), '/') . '/login');
     }
 }
