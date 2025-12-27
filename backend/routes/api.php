@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 
 use App\Http\Controllers\Api\StudentInternshipController;
 use App\Http\Controllers\Api\GarantInternshipController;
@@ -131,4 +132,23 @@ Route::middleware('auth:sanctum')->group(function () {
         '/company/internships/{internship}/contact-garant',
         [CompanyInternshipController::class, 'contactGarant']
     );
+});
+/*
+|--------------------------------------------------------------------------
+| FIRMY – zoznam pre študenta (výber firmy pri tvorbe praxe)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:sanctum')->get('/companies', function () {
+    return DB::table('company')
+        ->leftJoin('address', 'address.address_id', '=', 'company.address_id')
+        ->orderBy('company.company_name')
+        ->select([
+            'company.company_id as company_id',
+            'company.company_name as company_name',
+            'address.street',
+            'address.city',
+            'address.zip',
+            'address.country',
+        ])
+        ->get();
 });

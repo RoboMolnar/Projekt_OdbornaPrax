@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\CompanyActivationMail;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
@@ -21,9 +22,9 @@ class RegisterCompanyController extends Controller
                 'last_name'    => ['required', 'string', 'max:100'],
                 'email'        => ['required', 'email', 'max:255', 'unique:users,email'],
                 'phone_number' => ['required', 'string', 'max:50'],
+                'company_name' => ['nullable', 'string', 'max:255'],
                 'ico'          => ['required', 'string', 'max:45'],
                 'dic'          => ['required', 'string', 'max:45'],
-                // voliteľne: 'company_name' => ['nullable','string','max:255'],
             ],
             [
                 'first_name.required'   => 'Meno je povinné.',
@@ -37,38 +38,57 @@ class RegisterCompanyController extends Controller
             ]
         );
 
-        // vygenerujeme dočasné heslo
-        $plain = Str::password(14);
+        return DB::transaction(function () use ($data) {
 
-        // vytvoríme používateľa – konto firmy (kontakt)
-        $user = User::create([
-            'role'                 => 'company',
-            'first_name'           => $data['first_name'],
-            'last_name'            => $data['last_name'],
-            'email'                => $data['email'],
-            'phone_number'         => $data['phone_number'],
-            'password'             => Hash::make($plain),
-            'active'               => 0,   // potrebuje aktiváciu
-            'must_change_password' => 1,
-        ]);
+            // 1) nájdi firmu podľa IČO alebo ju vytvor v tabuľke company
+            $existing = DB::table('company')->where('ico', $data['ico'])->first();
 
-        // POZOR: ico/dic/ nazov firmy by si mal uložiť do tabuľky company,
-        // to riešiš buď tu, alebo v activácii (CompanyActivationController).
+            if ($existing) {
+                $companyId = $existing->company_id;
+            } else {
+                $companyId = DB::table('company')->insertGetId([
+                    'company_name'  => $data['company_name'] ?? ($data['first_name'] . ' ' . $data['last_name']),
+                    'ico'           => $data['ico'],
+                    'dic'           => $data['dic'],
+                    'email'         => $data['email'],
+                    'phone_contact' => $data['phone_number'],
+                    'address_id'    => null,
+                    'created_at'    => now(),
+                    'updated_at'    => now(),
+                ], 'company_id');
+            }
 
-        $activationUrl = URL::temporarySignedRoute(
-            'company.activate',
-            now()->addHours(72),
-            ['user' => $user->user_id] // primárny kľúč user_id
-        );
+            // 2) vygenerujeme dočasné heslo
+            $plain = Str::password(14);
 
-        try {
-            Mail::to($user->email)->send(new CompanyActivationMail($user, $plain, $activationUrl));
-        } catch (\Throwable $e) {
-            report($e);
-        }
+            // 3) vytvoríme používateľa – konto firmy (kontakt)
+            $user = User::create([
+                'role'                 => 'company',
+                'first_name'           => $data['first_name'],
+                'last_name'            => $data['last_name'],
+                'email'                => $data['email'],
+                'phone_number'         => $data['phone_number'],
+                'password'             => Hash::make($plain),
+                'active'               => 0,
+                'must_change_password' => 1,
+                'company_id'           => $companyId, // ✅ prepojenie user -> company
+            ]);
 
-        return response()->json([
-            'message' => 'Firma zaregistrovaná. Poslali sme aktivačný e-mail.',
-        ], 201);
+            $activationUrl = URL::temporarySignedRoute(
+                'company.activate',
+                now()->addHours(72),
+                ['user' => $user->user_id]
+            );
+
+            try {
+                Mail::to($user->email)->send(new CompanyActivationMail($user, $plain, $activationUrl));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            return response()->json([
+                'message' => 'Firma zaregistrovaná. Poslali sme aktivačný e-mail.',
+            ], 201);
+        });
     }
 }

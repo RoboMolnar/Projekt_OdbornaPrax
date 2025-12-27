@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             PracticeStatusSeeder::class,
+            GarantSeeder::class,
         ]);
 
         

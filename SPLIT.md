@@ -9,11 +9,11 @@ Run
    - `cd backend`
    - Configure `.env` (ensure `APP_KEY` is set: `php artisan key:generate`)
    - Ensure `FRONTEND_URL=http://localhost:5173` in `.env`
-   - Start server: `php artisan serve` (http://localhost:8000)
+   - Start server: `php artisan serve` (http://localhost:8081)
 
 2) Frontend
    - `cd frontend`
-   - `cp .env.example .env` and adjust `VITE_API_URL=http://localhost:8000`
+   - `cp .env.example .env` and adjust `VITE_API_URL=http://localhost:8081`
    - `npm install`
    - `npm run dev` (http://localhost:5173)
 
