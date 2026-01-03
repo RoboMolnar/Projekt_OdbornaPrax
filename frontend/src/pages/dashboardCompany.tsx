@@ -38,14 +38,15 @@ type PracticeDetail = {
 type Filter = { status: string; year: string; search: string; program: string };
 
 const STATUS_CLASSES: Record<string, string> = {
-  Vytvorená: 'border-green-300 text-green-700 bg-green-50',
-  Schválená: 'border-green-500 text-green-800 bg-green-100',
-  Obhájená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
-  Neobhájená: 'border-red-300 text-red-700 bg-red-50',
-  Zamietnutá: 'border-red-300 text-red-700 bg-red-50',
+  Odoslaná_na_schválenie: 'border-green-300 text-green-700 bg-green-50',
+  Prebieha: 'border-green-500 text-green-800 bg-green-100',
+  Schválená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
+  Ukončená: 'border-red-300 text-red-700 bg-red-50',
+  Vnávrhu: 'border-red-300 text-red-700 bg-red-50',
+
 };
 
-const ALL_STATES = ['Vytvorená', 'Schválená', 'Zamietnutá', 'Obhájená', 'Neobhájená'] as const;
+const ALL_STATES = ['Odoslaná na schválenie','Schválená', 'Zamietnutá',] as const;
 const breadcrumbs = [{ title: 'Dashboard firmy', href: '/dashboard-company' }];
 
 export default function DashboardCompany() {
@@ -347,21 +348,7 @@ export default function DashboardCompany() {
 
                           {r.status === 'Schválená' && (
                             <>
-                              <Button
-                                size="sm"
-                                className="bg-green-700 hover:bg-green-800 text-white"
-                                onClick={() => grade(r.id, true)}
-                              >
-                                Ohodnotiť: Prešiel
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="bg-green-100 text-green-800 hover:bg-green-200"
-                                onClick={() => grade(r.id, false)}
-                              >
-                                Neprešiel
-                              </Button>
+                              
                             </>
                           )}
 
@@ -374,14 +361,14 @@ export default function DashboardCompany() {
                             Detail
                           </Button>
 
-                          <Button
+    {/*                        <Button
                             size="sm"
                             variant="destructive"
                             className="bg-red-600 hover:bg-red-700 text-white"
                             onClick={() => removeInternship(r.id)}
                           >
                             Vymazať
-                          </Button>
+                          </Button> */}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -548,7 +535,7 @@ export default function DashboardCompany() {
 
                     {selected.status === 'Schválená' && (
                       <>
-                        <Button
+                  {/*      <Button
                           size="sm"
                           className="bg-green-700 hover:bg-green-800 text-white"
                           onClick={() => grade(selected.id, true)}
@@ -562,18 +549,18 @@ export default function DashboardCompany() {
                           onClick={() => grade(selected.id, false)}
                         >
                           Neprešiel
-                        </Button>
+                        </Button> */}
                       </>
                     )}
 
-                    <Button
+  {/*                  <Button
                       size="sm"
                       variant="destructive"
                       className="bg-red-600 hover:bg-red-700 text-white"
                       onClick={() => removeInternship(selected.id)}
                     >
                       Vymazať
-                    </Button>
+                    </Button> */}
                   </div>
                 </div>
               )}

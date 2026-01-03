@@ -901,6 +901,7 @@ class ComposerStaticInitfda2738d59fade9320638be36e9ae642
         'DASPRiD\\Enum\\NullValue' => __DIR__ . '/..' . '/dasprid/enum/src/NullValue.php',
         'Database\\Factories\\UserFactory' => __DIR__ . '/../..' . '/database/factories/UserFactory.php',
         'Database\\Seeders\\DatabaseSeeder' => __DIR__ . '/../..' . '/database/seeders/DatabaseSeeder.php',
+        'Database\\Seeders\\GarantSeeder' => __DIR__ . '/../..' . '/database/seeders/GarantSeeder.php',
         'Database\\Seeders\\PracticeStatusSeeder' => __DIR__ . '/../..' . '/database/seeders/PracticeStatusSeeder.php',
         'DateError' => __DIR__ . '/..' . '/symfony/polyfill-php83/Resources/stubs/DateError.php',
         'DateException' => __DIR__ . '/..' . '/symfony/polyfill-php83/Resources/stubs/DateException.php',

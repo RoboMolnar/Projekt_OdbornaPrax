@@ -45,7 +45,7 @@ const STATUS_CLASSES: Record<string, string> = {
   Zamietnutá: 'border-rose-300 text-rose-700 bg-rose-50',
 };
 
-const ALL_STATES = ['Vytvorená', 'Schválená', 'Zamietnutá', 'Obhájená', 'Neobhájená'] as const;
+const ALL_STATES = ['Odoslaná na schválenie', 'Prebieha', 'Schválená', 'Ukončená', 'V návrhu', 'Zamietnutá', 'Zrušená'] as const;
 
 export default function DashboardGarant() {
   const [rows, setRows] = useState<PracticeRow[]>([]);
@@ -214,11 +214,13 @@ export default function DashboardGarant() {
                 onChange={(e) => setFilter({ ...filter, status: e.target.value })}
               >
                 <option value="all">Všetky stavy</option>
-                <option value="Vytvorená">Vytvorená</option>
+                <option value="Odoslaná na schválenie">Odoslaná na schválenie</option>
+                <option value="Prebieha">Prebieha</option>
                 <option value="Schválená">Schválená</option>
-                <option value="Obhájená">Obhájená</option>
-                <option value="Neobhájená">Neobhájená</option>
+                <option value="Ukončená">Neobhájená</option>
+                <option value="V návrhu">V návrhu</option>
                 <option value="Zamietnutá">Zamietnutá</option>
+                <option value="Zrušená">Zrušená</option>
               </select>
 
               <select

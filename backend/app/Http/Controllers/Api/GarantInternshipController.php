@@ -195,7 +195,7 @@ class GarantInternshipController extends Controller
         $validated = $request->validate([
             'state' => [
                 'required',
-                Rule::in(['Vytvorená', 'Schválená', 'Zamietnutá', 'Obhájená', 'Neobhájená']),
+                Rule::in(['Odoslaná na schválenie', 'Prebieha', 'Schválená', 'Ukončená', 'V návrhu', 'Zamietnutá', 'Zrušená']),
             ],
         ]);
 
