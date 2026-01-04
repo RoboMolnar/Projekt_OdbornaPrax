@@ -25,7 +25,6 @@ Route::get('/health', function () {
 | Registrácia
 |--------------------------------------------------------------------------
 */
-
 Route::post('/register/student', [RegisterStudentController::class, 'store']);
 Route::post('/register/company', [RegisterCompanyController::class, 'store']);
 
@@ -34,37 +33,47 @@ Route::post('/register/company', [RegisterCompanyController::class, 'store']);
 | Autentifikácia
 |--------------------------------------------------------------------------
 */
-
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
 /*
 |--------------------------------------------------------------------------
-| Info o prihlásenom používateľovi
+| Zabudnuté heslo (bez prihlásenia)
 |--------------------------------------------------------------------------
 */
-
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    $user = $request->user();
-
-    return response()->json([
-        // podľa DB máš primárny kľúč user_id
-        'id'                  => $user->user_id ?? $user->id,
-        'email'               => $user->email,
-        'name'                => $user->name
-            ?? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-        'role'                => $user->role ?? 'student',
-        'must_change_password'=> (bool)($user->must_change_password ?? false),
-    ]);
-});
+Route::post('/password/forgot', [PasswordController::class, 'forgot']);
+Route::post('/password/reset-with-temp', [PasswordController::class, 'resetWithTemp']);
 
 /*
 |--------------------------------------------------------------------------
-| Nútená zmena hesla
+| Spoločné pre všetkých prihlásených
 |--------------------------------------------------------------------------
 */
-
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Info o prihlásenom používateľovi
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/user', function (Request $request) {
+        $user = $request->user();
+
+        return response()->json([
+            'id'                   => $user->user_id ?? $user->id,
+            'email'                => $user->email,
+            'name'                 => $user->name
+                ?? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+            'role'                 => $user->role ?? 'student',
+            'must_change_password' => (bool)($user->must_change_password ?? false),
+        ]);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nútená zmena hesla (spoločné)
+    |--------------------------------------------------------------------------
+    */
     Route::get('/password/force-change-check', [PasswordController::class, 'check']);
     Route::post('/password/force-change', [PasswordController::class, 'update']);
 });
@@ -73,18 +82,34 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | ŠTUDENT – praxe
 |--------------------------------------------------------------------------
-|
-| !!! Dôležité:
-|  - používame VÝHRADNE StudentInternshipController
-|  - POST /student/internships očakáva company_id
-|    a v kontroléri sa uloží do internship.company_id
-|--------------------------------------------------------------------------
 */
-
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
     Route::get('/student/internships', [StudentInternshipController::class, 'index']);
     Route::post('/student/internships', [StudentInternshipController::class, 'store']);
     Route::get('/student/internships/{internship}', [StudentInternshipController::class, 'show']);
+    Route::patch('/student/internships/{internship}', [StudentInternshipController::class, 'update']);
+    Route::delete('/student/internships/{internship}', [StudentInternshipController::class, 'destroy']);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIRMY – zoznam pre študenta (výber firmy pri tvorbe praxe)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/companies', function () {
+        return DB::table('company')
+            ->leftJoin('address', 'address.address_id', '=', 'company.address_id')
+            ->orderBy('company.company_name')
+            ->select([
+                'company.company_id as company_id',
+                'company.company_name as company_name',
+                'address.street',
+                'address.city',
+                'address.zip',
+                'address.country',
+            ])
+            ->get();
+    });
 });
 
 /*
@@ -92,8 +117,7 @@ Route::middleware('auth:sanctum')->group(function () {
 | GARANT – praxe
 |--------------------------------------------------------------------------
 */
-
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'role:garant'])->group(function () {
     Route::get('/garant/internships', [GarantInternshipController::class, 'indexAll']);
     Route::get('/garant/internships/{internship}', [GarantInternshipController::class, 'show']);
     Route::post('/garant/internships/{internship}/approve', [GarantInternshipController::class, 'approve']);
@@ -107,48 +131,19 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | FIRMA – praxe
 |--------------------------------------------------------------------------
-|
-| Firma vidí len praxe, kde internship.company_id = users.company_id
-| (logika je v CompanyInternshipController@index + ensureBelongsToCompany)
-|--------------------------------------------------------------------------
 */
-
-Route::middleware('auth:sanctum')->group(function () {
-    // zoznam praxí pre konkrétnu prihlásenú firmu
+Route::middleware(['auth:sanctum', 'role:company'])->group(function () {
     Route::get('/company/internships', [CompanyInternshipController::class, 'index']);
-
-    // detail jednej praxe
     Route::get('/company/internships/{internship}', [CompanyInternshipController::class, 'show']);
 
-    // tie isté akcie ako má garant
     Route::post('/company/internships/{internship}/approve', [CompanyInternshipController::class, 'approve']);
     Route::post('/company/internships/{internship}/reject', [CompanyInternshipController::class, 'reject']);
     Route::post('/company/internships/{internship}/grade', [CompanyInternshipController::class, 'grade']);
     Route::patch('/company/internships/{internship}/state', [CompanyInternshipController::class, 'setState']);
     Route::delete('/company/internships/{internship}', [CompanyInternshipController::class, 'destroy']);
 
-    // kontaktovanie garanta
     Route::post(
         '/company/internships/{internship}/contact-garant',
         [CompanyInternshipController::class, 'contactGarant']
     );
-});
-/*
-|--------------------------------------------------------------------------
-| FIRMY – zoznam pre študenta (výber firmy pri tvorbe praxe)
-|--------------------------------------------------------------------------
-*/
-Route::middleware('auth:sanctum')->get('/companies', function () {
-    return DB::table('company')
-        ->leftJoin('address', 'address.address_id', '=', 'company.address_id')
-        ->orderBy('company.company_name')
-        ->select([
-            'company.company_id as company_id',
-            'company.company_name as company_name',
-            'address.street',
-            'address.city',
-            'address.zip',
-            'address.country',
-        ])
-        ->get();
 });

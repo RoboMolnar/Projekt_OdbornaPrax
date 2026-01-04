@@ -16,13 +16,13 @@ class PracticeStatusSeeder extends Seeder
         // DB::table('internship_state')->truncate();
 
         DB::table('internship_state')->insert([
-            ['internship_state_name' => 'V návrhu'],
-            ['internship_state_name' => 'Odoslaná na schválenie'],
+            ['internship_state_name' => 'Vytvorená'],
+            ['internship_state_name' => 'Potvrdená'],
+            ['internship_state_name' => 'Zamietnutá'],   // zamietne firma
             ['internship_state_name' => 'Schválená'],
-            ['internship_state_name' => 'Prebieha'],
-            ['internship_state_name' => 'Ukončená'],
-            ['internship_state_name' => 'Zamietnutá'],
-            ['internship_state_name' => 'Zrušená'],
+            ['internship_state_name' => 'Neschválená'],  // neschváli garant
+            ['internship_state_name' => 'Obhájená'],
+            ['internship_state_name' => 'Neobhájená'],
         ]);
     }
 }

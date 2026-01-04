@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import AppLayoutSpa from '@/ui/AppLayoutSpa';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,24 @@ export default function DashboardStudent() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedPractice, setSelectedPractice] = useState<PracticeDetail | null>(null);
 
+  // EDIT MODE
+  const [editing, setEditing] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    street: '',
+    city: '',
+    zip: '',
+    country: '',
+    start_date: '',
+    end_date: '',
+    year: '',
+    semester: '1',
+    worked_hours: '',
+  });
+
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
   useEffect(() => {
     document.title = 'Dashboard študenta';
     loadPractices();
@@ -110,8 +128,17 @@ export default function DashboardStudent() {
 
       await loadPractices();
       setShowForm(false);
-    } catch (e) {
-      setFormError('Prax sa nepodarilo uložiť. Skontroluj údaje alebo skús neskôr.');
+    } catch (e: any) {
+      // Skús vytiahnuť reálnu chybu z backendu (validácia / DB / čokoľvek)
+      const msg = e?.response?.data?.message;
+
+      const errors = e?.response?.data?.errors;
+      const firstError =
+        errors && typeof errors === 'object'
+          ? (Object.values(errors).flat() as any[])[0]
+          : null;
+
+      setFormError(firstError || msg || 'Prax sa nepodarilo uložiť. Skontroluj údaje alebo skús neskôr.');
     }
   }
 
@@ -121,9 +148,27 @@ export default function DashboardStudent() {
     setDetailError(null);
     setSelectedPractice(null);
 
+    // reset edit state
+    setEditing(false);
+    setEditError(null);
+    setEditBusy(false);
+
     try {
       const res = await api.get<PracticeDetail>(`/api/student/internships/${id}`);
       setSelectedPractice(res.data);
+
+      // predvyplň edit form
+      setEditForm({
+        street: res.data.street ?? '',
+        city: res.data.city ?? '',
+        zip: res.data.zip ?? '',
+        country: res.data.country ?? 'Slovensko',
+        start_date: res.data.start_date ?? '',
+        end_date: res.data.end_date ?? '',
+        year: String(res.data.year ?? ''),
+        semester: String(res.data.semester ?? '1'),
+        worked_hours: res.data.worked_hours == null ? '' : String(res.data.worked_hours),
+      });
     } catch (e) {
       setDetailError('Nepodarilo sa načítať detaily praxe.');
     } finally {
@@ -133,14 +178,78 @@ export default function DashboardStudent() {
 
   function closeDetail() {
     setDetailOpen(false);
+    setEditing(false);
+    setEditError(null);
+  }
+
+  const canEditOrDelete = useMemo(() => {
+    // podľa screenshotu máš stav "Odoslaná na schválenie"
+    // Ak chceš povoliť edit aj v tomto stave, nechaj true.
+    // Ak chceš povoliť edit len pred odoslaním, zmeň logiku tu.
+    return !!selectedPractice;
+  }, [selectedPractice]);
+
+  function onEditChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function saveEdit() {
+    if (!selectedPractice) return;
+
+    setEditBusy(true);
+    setEditError(null);
+
+    try {
+      await api.patch(`/api/student/internships/${selectedPractice.id}`, {
+        street: editForm.street || null,
+        city: editForm.city || null,
+        zip: editForm.zip || null,
+        country: editForm.country || null,
+        start_date: editForm.start_date,
+        end_date: editForm.end_date,
+        year: editForm.year ? Number(editForm.year) : undefined,
+        semester: editForm.semester,
+        worked_hours: editForm.worked_hours === '' ? null : Number(editForm.worked_hours),
+      });
+
+      // refresh detail + list
+      await openDetail(selectedPractice.id);
+      await loadPractices();
+      setEditing(false);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message;
+      setEditError(msg || 'Nepodarilo sa uložiť zmeny. Skontroluj údaje alebo skús neskôr.');
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function deletePractice() {
+    if (!selectedPractice) return;
+
+    const ok = window.confirm('Naozaj chceš zmazať túto prax? Táto akcia sa nedá vrátiť späť.');
+    if (!ok) return;
+
+    setDeleteBusy(true);
+    setEditError(null);
+
+    try {
+      await api.delete(`/api/student/internships/${selectedPractice.id}`);
+      closeDetail();
+      await loadPractices();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message;
+      setEditError(msg || 'Nepodarilo sa zmazať prax. Skús neskôr.');
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   return (
     <AppLayoutSpa breadcrumbs={breadcrumbs}>
       <div className="space-y-6">
-        {/* sivý rámik a jemný tieň */}
         <Card className="bg-white/90 border border-green-200 shadow-sm">
-          {/* HLAVIČKA S TLAČIDLOM "NOVÁ PRAX" */}
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
               <CardTitle className="text-green-700">Moje praxe</CardTitle>
@@ -158,7 +267,6 @@ export default function DashboardStudent() {
           </CardHeader>
 
           <CardContent>
-            {/* ROZBAĽOVACÍ FORMULÁR POD HLAVIČKOU */}
             {showForm && (
               <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
                 <h2 className="mb-3 text-sm font-semibold text-green-800">
@@ -352,7 +460,7 @@ export default function DashboardStudent() {
                     <TableCell>
                       <Badge>{p.status}</Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -369,55 +477,47 @@ export default function DashboardStudent() {
         </Card>
       </div>
 
-      {/* NÁŠ VLASTNÝ MODAL S DETAILOM PRAXE */}
+      {/* MODAL: DETAIL + EDIT */}
       {detailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-green-200 p-6">
-            <div className="flex items-start justify_between gap-4">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-green-900">Detail praxe</h2>
+                <h2 className="text-lg font-semibold text-green-900">
+                  {editing ? 'Upraviť prax' : 'Detail praxe'}
+                </h2>
                 <p className="text-sm text-green-700">
-                  Podrobné informácie o tvojej odbornej praxi.
+                  {editing ? 'Upraviteľné sú údaje okrem firmy a stavu.' : 'Podrobné informácie o tvojej odbornej praxi.'}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeDetail}
                 className="text-green-400 hover:text-green-600 text-xl leading-none"
+                aria-label="Zavrieť"
               >
                 ×
               </button>
             </div>
 
             <div className="mt-4 text-sm">
-              {detailLoading && (
-                <p className="text-green-700">Načítavam…</p>
-              )}
+              {detailLoading && <p className="text-green-700">Načítavam…</p>}
+              {detailError && <p className="text-red-600">{detailError}</p>}
 
-              {detailError && (
-                <p className="text-red-600">{detailError}</p>
-              )}
-
-              {!detailLoading && !detailError && selectedPractice && (
+              {!detailLoading && !detailError && selectedPractice && !editing && (
                 <div className="space-y-3">
                   <div>
                     <p className="font-semibold text-green-800">Firma</p>
-                    <p className="text-green-900">
-                      {selectedPractice.company_name || '—'}
-                    </p>
+                    <p className="text-green-900">{selectedPractice.company_name || '—'}</p>
                   </div>
 
                   <div>
                     <p className="font-semibold text-green-800">Adresa</p>
                     <p className="text-green-900">
-                      {[selectedPractice.street, selectedPractice.city]
-                        .filter(Boolean)
-                        .join(', ') || '—'}
+                      {[selectedPractice.street, selectedPractice.city].filter(Boolean).join(', ') || '—'}
                     </p>
                     <p className="text-green-900">
-                      {[selectedPractice.zip, selectedPractice.country]
-                        .filter(Boolean)
-                        .join(' ') || ''}
+                      {[selectedPractice.zip, selectedPractice.country].filter(Boolean).join(' ') || ''}
                     </p>
                   </div>
 
@@ -443,26 +543,139 @@ export default function DashboardStudent() {
                     </div>
                     <div>
                       <p className="font-semibold text-green-800">Odpracované hodiny</p>
-                      <p className="text-green-900">
-                        {selectedPractice.worked_hours ?? '—'}
-                      </p>
+                      <p className="text-green-900">{selectedPractice.worked_hours ?? '—'}</p>
                     </div>
                   </div>
 
                   <div>
                     <p className="font-semibold text-green-800">Stav</p>
-                    <Badge className="mt-1">
-                      {selectedPractice.status ?? '—'}
-                    </Badge>
+                    <Badge className="mt-1">{selectedPractice.status ?? '—'}</Badge>
                   </div>
+                </div>
+              )}
+
+              {!detailLoading && !detailError && selectedPractice && editing && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium mb-1 text-green-800">Ulica</label>
+                      <Input name="street" value={editForm.street} onChange={onEditChange} />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Mesto</label>
+                      <Input name="city" value={editForm.city} onChange={onEditChange} />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">PSČ</label>
+                      <Input name="zip" value={editForm.zip} onChange={onEditChange} />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Štát</label>
+                      <Input name="country" value={editForm.country} onChange={onEditChange} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Dátum začiatku *</label>
+                      <Input type="date" name="start_date" value={editForm.start_date} onChange={onEditChange} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Dátum konca *</label>
+                      <Input type="date" name="end_date" value={editForm.end_date} onChange={onEditChange} required />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Rok *</label>
+                      <Input type="number" name="year" value={editForm.year} onChange={onEditChange} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Semester *</label>
+                      <select
+                        name="semester"
+                        value={editForm.semester}
+                        onChange={onEditChange}
+                        className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      >
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-green-800">Odpracované hodiny</label>
+                      <Input type="number" name="worked_hours" value={editForm.worked_hours} onChange={onEditChange} min={0} />
+                    </div>
+                  </div>
+
+                  {editError && <p className="text-sm text-red-600">{editError}</p>}
                 </div>
               )}
             </div>
 
-            <div className="mt-6 flex justify-end">
-              <Button variant="outline" onClick={closeDetail}>
-                Zavrieť
-              </Button>
+            <div className="mt-6 flex items-center justify-between gap-2">
+              {/* Ľavá strana: delete */}
+              <div>
+                {!detailLoading && !detailError && selectedPractice && !editing && canEditOrDelete && (
+                  <Button
+                    variant="destructive"
+                    onClick={deletePractice}
+                    disabled={deleteBusy}
+                  >
+                    {deleteBusy ? 'Mažem…' : 'Zmazať'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Pravá strana: akcie */}
+              <div className="flex justify-end gap-2">
+                {!detailLoading && !detailError && selectedPractice && !editing && canEditOrDelete && (
+                  <Button
+                    onClick={() => setEditing(true)}
+                    className="bg-green-700 text-white hover:bg-green-800"
+                  >
+                    Upraviť
+                  </Button>
+                )}
+
+                {!detailLoading && !detailError && selectedPractice && editing && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // reset edit form na pôvodné hodnoty
+                        setEditForm({
+                          street: selectedPractice.street ?? '',
+                          city: selectedPractice.city ?? '',
+                          zip: selectedPractice.zip ?? '',
+                          country: selectedPractice.country ?? 'Slovensko',
+                          start_date: selectedPractice.start_date ?? '',
+                          end_date: selectedPractice.end_date ?? '',
+                          year: String(selectedPractice.year ?? ''),
+                          semester: String(selectedPractice.semester ?? '1'),
+                          worked_hours: selectedPractice.worked_hours == null ? '' : String(selectedPractice.worked_hours),
+                        });
+                        setEditError(null);
+                        setEditing(false);
+                      }}
+                      disabled={editBusy}
+                    >
+                      Zrušiť
+                    </Button>
+                    <Button onClick={saveEdit} disabled={editBusy}>
+                      {editBusy ? 'Ukladám…' : 'Uložiť'}
+                    </Button>
+                  </>
+                )}
+
+                <Button variant="outline" onClick={closeDetail}>
+                  Zavrieť
+                </Button>
+              </div>
             </div>
           </div>
         </div>

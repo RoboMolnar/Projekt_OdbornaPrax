@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\InternshipStateChanged;
 use App\Models\Internship;
 use App\Models\InternshipState;
 use App\Models\InternshipStateChange;
@@ -14,6 +15,31 @@ use Illuminate\Support\Facades\Mail;
 
 class CompanyInternshipController extends Controller
 {
+    /**
+     * Alias pre zobrazenie stavu v UI:
+     * - DB stav "Schválená" sa má na FE zobrazovať ako "Prebieha"
+     */
+    private function mapStatusForUi(?string $status): ?string
+    {
+        if ($status === null) {
+            return null;
+        }
+
+        return $status === 'Schválená' ? 'Prebieha' : $status;
+    }
+
+    /**
+     * Stavy, pri ktorých už firma NESMIE meniť rozhodnutie (garant už rozhodol / finálne stavy).
+     */
+    private function isLockedForCompany(?string $status): bool
+    {
+        if ($status === null) {
+            return false;
+        }
+
+        return in_array($status, ['Schválená', 'Neschválená', 'Obhájená', 'Neobhájená'], true);
+    }
+
     /**
      * Zoznam praxí pre prihlásenú firmu.
      */
@@ -45,7 +71,7 @@ class CompanyInternshipController extends Controller
             }
         }
 
-        // filter podľa stavu (textový názov – Vytvorená, Schválená, ...)
+        // filter podľa stavu (textový názov)
         if ($status = $request->query('status')) {
             if ($status !== 'all') {
                 $query->whereHas('state', function ($q) use ($status) {
@@ -93,6 +119,9 @@ class CompanyInternshipController extends Controller
             $fos     = $student?->fieldOfStudy;
             $state   = $i->state;
 
+            $status = $state?->internship_state_name ?? '—';
+            $status = $this->mapStatusForUi($status);
+
             return [
                 'id'      => $i->internship_id,
                 'student' => $student
@@ -100,7 +129,7 @@ class CompanyInternshipController extends Controller
                     : '—',
                 'program' => $fos?->field_of_study_name,
                 'year'    => (int) $i->year,
-                'status'  => $state?->internship_state_name ?? '—',
+                'status'  => $status,
             ];
         });
 
@@ -128,6 +157,9 @@ class CompanyInternshipController extends Controller
         $state   = $internship->state;
         $garant  = $internship->garant;
 
+        $status = $state?->internship_state_name ?? '—';
+        $status = $this->mapStatusForUi($status);
+
         $detail = [
             'id'                => $internship->internship_id,
             'student_firstname' => $student?->first_name ?? '',
@@ -146,7 +178,7 @@ class CompanyInternshipController extends Controller
             'year'              => (int) $internship->year,
             'semester'          => $internship->semester,
             'worked_hours'      => $internship->worked_hours,
-            'status'            => $state?->internship_state_name ?? '—',
+            'status'            => $status,
 
             'garant_email'      => $garant?->email ?? null,
         ];
@@ -155,28 +187,90 @@ class CompanyInternshipController extends Controller
     }
 
     /**
-     * Schválenie praxe.
+     * Firma POTVRDÍ prax.
+     * Povolené z: Vytvorená alebo Zamietnutá -> Potvrdená
+     * Zakázané po rozhodnutí garanta.
      */
     public function approve(Request $request, Internship $internship): JsonResponse
     {
         $this->ensureBelongsToCompany($request, $internship);
 
-        $this->changeStateInternal($internship, 'Schválená', $request->user());
+        $internship->loadMissing(['state', 'student', 'garant', 'company']);
+
+        $current = $internship->state?->internship_state_name;
+
+        if ($this->isLockedForCompany($current)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Stav už bol uzavretý garantom, firma ho nemôže meniť.',
+            ], 422);
+        }
+
+        // ak je už Potvrdená, nič nemeníme
+        if ($current === 'Potvrdená') {
+            return response()->json([
+                'ok' => true,
+                'status' => 'Potvrdená',
+            ]);
+        }
+
+        if (!in_array($current, ['Vytvorená', 'Zamietnutá', null], true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Potvrdiť možno len prax v stave Vytvorená alebo Zamietnutá.',
+            ], 422);
+        }
+
+        $this->changeStateInternal($internship, 'Potvrdená', $request->user());
+
+        // ✅ jednotný mail pre študenta (HTML)
+        $this->notifyOnConfirmed($internship, $current);
 
         return response()->json([
             'ok'     => true,
-            'status' => $internship->state->internship_state_name ?? 'Schválená',
+            'status' => $internship->state->internship_state_name ?? 'Potvrdená',
         ]);
     }
 
     /**
-     * Zamietnutie praxe.
+     * Firma ZAMIETNE prax.
+     * Povolené z: Vytvorená alebo Potvrdená -> Zamietnutá
+     * Zakázané po rozhodnutí garanta.
      */
     public function reject(Request $request, Internship $internship): JsonResponse
     {
         $this->ensureBelongsToCompany($request, $internship);
 
+        $internship->loadMissing(['state', 'student', 'company']);
+
+        $current = $internship->state?->internship_state_name;
+
+        if ($this->isLockedForCompany($current)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Stav už bol uzavretý garantom, firma ho nemôže meniť.',
+            ], 422);
+        }
+
+        // ak je už Zamietnutá, nič nemeníme
+        if ($current === 'Zamietnutá') {
+            return response()->json([
+                'ok' => true,
+                'status' => 'Zamietnutá',
+            ]);
+        }
+
+        if (!in_array($current, ['Vytvorená', 'Potvrdená', null], true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Zamietnuť možno len prax v stave Vytvorená alebo Potvrdená.',
+            ], 422);
+        }
+
         $this->changeStateInternal($internship, 'Zamietnutá', $request->user());
+
+        // ✅ jednotný mail pre študenta (HTML)
+        $this->notifyOnRejected($internship, $current);
 
         return response()->json([
             'ok'     => true,
@@ -185,42 +279,70 @@ class CompanyInternshipController extends Controller
     }
 
     /**
-     * Hodnotenie praxe (prešiel / neprešiel) – mení stav na Obhájená / Neobhájená.
+     * Firma už NERIEŠI hodnotenie (Obhájená/Neobhájená) – to je garant / externý systém.
      */
     public function grade(Request $request, Internship $internship): JsonResponse
     {
-        $this->ensureBelongsToCompany($request, $internship);
-
-        $data = $request->validate([
-            'passed' => 'required|boolean',
-        ]);
-
-        $targetName = $data['passed'] ? 'Obhájená' : 'Neobhájená';
-
-        $this->changeStateInternal($internship, $targetName, $request->user());
-
         return response()->json([
-            'ok'     => true,
-            'status' => $internship->state->internship_state_name ?? $targetName,
-        ]);
+            'ok' => false,
+            'message' => 'Hodnotenie praxe (Obhájená/Neobhájená) vykonáva garant (nie firma).',
+        ], 403);
     }
 
     /**
-     * Manuálna zmena stavu (používa dropdown v detaile).
+     * Manuálna zmena stavu – firma má iba 2 možnosti: Potvrdená / Zamietnutá
+     * a môže ich prepínať, kým garant nerozhodne.
+     *
+     * Povolené zdrojové stavy: Vytvorená, Potvrdená, Zamietnutá
      */
     public function setState(Request $request, Internship $internship): JsonResponse
     {
         $this->ensureBelongsToCompany($request, $internship);
 
+        $internship->loadMissing(['state', 'student', 'garant', 'company']);
+
         $data = $request->validate([
-            'state' => 'required|string|in:Vytvorená,Schválená,Zamietnutá,Obhájená,Neobhájená',
+            'state' => 'required|string|in:Potvrdená,Zamietnutá',
         ]);
 
-        $this->changeStateInternal($internship, $data['state'], $request->user());
+        $current = $internship->state?->internship_state_name;
+
+        if ($this->isLockedForCompany($current)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Stav už bol uzavretý garantom, firma ho nemôže meniť.',
+            ], 422);
+        }
+
+        $target = $data['state'];
+
+        // ak je to rovnaké, nič nemeníme
+        if ($current === $target) {
+            return response()->json([
+                'ok' => true,
+                'status' => $target,
+            ]);
+        }
+
+        if (!in_array($current, ['Vytvorená', 'Potvrdená', 'Zamietnutá', null], true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Firma môže meniť stav len pred schválením garantom (Vytvorená/Potvrdená/Zamietnutá).',
+            ], 422);
+        }
+
+        $this->changeStateInternal($internship, $target, $request->user());
+
+        // ✅ jednotné študentské maily
+        if ($target === 'Potvrdená') {
+            $this->notifyOnConfirmed($internship, $current);
+        } else {
+            $this->notifyOnRejected($internship, $current);
+        }
 
         return response()->json([
             'ok'     => true,
-            'status' => $internship->state->internship_state_name ?? $data['state'],
+            'status' => $internship->state->internship_state_name ?? $target,
         ]);
     }
 
@@ -248,7 +370,7 @@ class CompanyInternshipController extends Controller
         ]);
 
         $user    = $request->user();
-        $garant  = $internship->garant;  // relácia na User (role = garant)
+        $garant  = $internship->garant;
         $company = $internship->company;
 
         if (!$garant || !$garant->email) {
@@ -262,10 +384,8 @@ class CompanyInternshipController extends Controller
 
         try {
             Mail::raw($body, function ($message) use ($garant, $user, $company, $subject) {
-                $message->to($garant->email)
-                    ->subject($subject);
+                $message->to($garant->email)->subject($subject);
 
-                // FROM musí byť adresa, pod ktorou sa prihlasuješ na SMTP
                 $fromEmail = config('mail.from.address');
                 $fromName  = config('mail.from.name', 'Portál praxe');
 
@@ -273,7 +393,6 @@ class CompanyInternshipController extends Controller
                     $message->from($fromEmail, $fromName);
                 }
 
-                // aby garant vedel odpovedať priamo firme, dáme ju do Reply-To
                 $replyEmail = $company?->email ?? $user->email ?? null;
                 $replyName  = $company?->company_name
                     ?? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
@@ -283,7 +402,6 @@ class CompanyInternshipController extends Controller
                 }
             });
         } catch (\Throwable $e) {
-            // zalogujeme detail chyby a pošleme slušnú správu klientovi
             Log::error('Chyba pri odosielaní mailu garantovi', [
                 'error'         => $e->getMessage(),
                 'internship_id' => $internship->internship_id,
@@ -296,7 +414,6 @@ class CompanyInternshipController extends Controller
             ], 500);
         }
 
-        // log do laravel.log (jednoduchý audit)
         Log::info('Firma kontaktovala garanta k praxi.', [
             'internship_id' => $internship->internship_id,
             'company_id'    => $company?->company_id,
@@ -359,5 +476,104 @@ class CompanyInternshipController extends Controller
             'note'                => null,
             'changed_at'          => now(),
         ]);
+    }
+
+    /**
+     * Notifikácia pri POTVRDENÍ:
+     * - Študent: pekný jednotný mail (InternshipStateChanged)
+     * - Garant: jednoduchý text (zatiaľ necháme)
+     */
+    private function notifyOnConfirmed(Internship $internship, ?string $oldStatus): void
+    {
+        $internship->loadMissing(['student', 'garant', 'company', 'state']);
+
+        $studentEmail = $internship->student?->email;
+        $garantEmail  = $internship->garant?->email;
+        $companyName  = $internship->company?->company_name ?? 'firma';
+        $id           = $internship->internship_id;
+
+        // ✅ jednotný študentský mail (HTML blade)
+        if ($studentEmail) {
+            try {
+                $studentName = trim(($internship->student?->first_name ?? '') . ' ' . ($internship->student?->last_name ?? ''));
+                $changedBy = "firmou {$companyName}";
+
+                Mail::to($studentEmail)->send(
+                    new InternshipStateChanged(
+                        $internship,
+                        $oldStatus,
+                        'Potvrdená',
+                        $studentName,
+                        $companyName,
+                        $changedBy,
+                        $id
+                    )
+                );
+            } catch (\Throwable $e) {
+                Log::error('Mail student (confirmed) failed', [
+                    'to' => $studentEmail,
+                    'error' => $e->getMessage(),
+                    'internship_id' => $id,
+                ]);
+            }
+        }
+
+        // Garantovi pošleme info, že treba schváliť/neschváliť
+        if ($garantEmail) {
+            $subject = "Prax #{$id} bola potvrdená firmou";
+            $bodyGarant = "Odborná prax #{$id} bola potvrdená firmou ({$companyName}).\n\nProsím, schváľte alebo neschváľte prax v systéme.";
+
+            try {
+                Mail::raw($bodyGarant, function ($message) use ($garantEmail, $subject) {
+                    $message->to($garantEmail)->subject($subject);
+                });
+            } catch (\Throwable $e) {
+                Log::error('Mail garant (confirmed) failed', [
+                    'to' => $garantEmail,
+                    'error' => $e->getMessage(),
+                    'internship_id' => $id,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Notifikácia pri ZAMIETNUTÍ:
+     * - iba študent (pekný jednotný mail)
+     */
+    private function notifyOnRejected(Internship $internship, ?string $oldStatus): void
+    {
+        $internship->loadMissing(['student', 'company', 'state']);
+
+        $studentEmail = $internship->student?->email;
+        $companyName  = $internship->company?->company_name ?? 'firma';
+        $id           = $internship->internship_id;
+
+        if (!$studentEmail) {
+            return;
+        }
+
+        try {
+            $studentName = trim(($internship->student?->first_name ?? '') . ' ' . ($internship->student?->last_name ?? ''));
+            $changedBy = "firmou {$companyName}";
+
+            Mail::to($studentEmail)->send(
+                new InternshipStateChanged(
+                    $internship,
+                    $oldStatus,
+                    'Zamietnutá',
+                    $studentName,
+                    $companyName,
+                    $changedBy,
+                    $id
+                )
+            );
+        } catch (\Throwable $e) {
+            Log::error('Mail student (rejected) failed', [
+                'to' => $studentEmail,
+                'error' => $e->getMessage(),
+                'internship_id' => $id,
+            ]);
+        }
     }
 }

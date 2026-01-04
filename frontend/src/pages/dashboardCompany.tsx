@@ -43,10 +43,17 @@ const STATUS_CLASSES: Record<string, string> = {
   Schválená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
   Ukončená: 'border-red-300 text-red-700 bg-red-50',
   Vnávrhu: 'border-red-300 text-red-700 bg-red-50',
-
+  Vytvorená: 'border-green-300 text-green-800 bg-green-50',
+  Potvrdená: 'border-green-500 text-green-800 bg-green-100',
+  Zamietnutá: 'border-red-300 text-red-700 bg-red-50',
+  Neschválená: 'border-red-300 text-red-700 bg-red-50',
+  Obhájená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
+  Neobhájená: 'border-red-300 text-red-700 bg-red-50',
 };
 
-const ALL_STATES = ['Odoslaná na schválenie','Schválená', 'Zamietnutá',] as const;
+// Firma potrebuje filtrovať hlavne tieto
+const ALL_STATES = ['Vytvorená', 'Potvrdená', 'Zamietnutá'] as const;
+
 const breadcrumbs = [{ title: 'Dashboard firmy', href: '/dashboard-company' }];
 
 export default function DashboardCompany() {
@@ -67,12 +74,15 @@ export default function DashboardCompany() {
   const [selected, setSelected] = useState<PracticeDetail | null>(null);
 
   const [searchInput, setSearchInput] = useState('');
-  const [pendingState, setPendingState] = useState<string>('');
 
   const [contactMessage, setContactMessage] = useState('');
   const [contactSending, setContactSending] = useState(false);
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
+
+  // --- UI helper: kedy má firma vidieť tlačidlá v detaile
+  const companyCanDecide =
+    selected && ['Vytvorená', 'Potvrdená', 'Zamietnutá'].includes(selected.status);
 
   useEffect(() => {
     const t = setTimeout(() => setFilter((f) => ({ ...f, search: searchInput })), 300);
@@ -113,7 +123,6 @@ export default function DashboardCompany() {
     setDetailLoading(true);
     setDetailError(null);
     setSelected(null);
-    setPendingState('');
     setContactMessage('');
     setContactError(null);
     setContactSuccess(null);
@@ -121,7 +130,6 @@ export default function DashboardCompany() {
     try {
       const res = await api.get<PracticeDetail>(`/api/company/internships/${id}`);
       setSelected(res.data);
-      setPendingState(res.data.status);
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'Nepodarilo sa načítať detail praxe.';
       setDetailError(msg);
@@ -134,7 +142,6 @@ export default function DashboardCompany() {
     setDetailOpen(false);
     setSelected(null);
     setDetailError(null);
-    setPendingState('');
     setContactMessage('');
     setContactError(null);
     setContactSuccess(null);
@@ -143,53 +150,22 @@ export default function DashboardCompany() {
   async function approve(id: number) {
     try {
       await api.post(`/api/company/internships/${id}/approve`);
-      closeDetail();
+      // refresh detail
+      await openDetail(id);
       await loadRows();
-    } catch {
-      alert('Nepodarilo sa schváliť prax.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Nepodarilo sa potvrdiť prax.';
+      alert(msg);
     }
   }
 
   async function reject(id: number) {
     try {
       await api.post(`/api/company/internships/${id}/reject`);
-      closeDetail();
-      await loadRows();
-    } catch {
-      alert('Nepodarilo sa zamietnuť prax.');
-    }
-  }
-
-  async function grade(id: number, passed: boolean) {
-    try {
-      await api.post(`/api/company/internships/${id}/grade`, { passed });
-      closeDetail();
-      await loadRows();
-    } catch {
-      alert('Nepodarilo sa uložiť hodnotenie.');
-    }
-  }
-
-  async function changeState(id: number, state: string) {
-    try {
-      await api.patch(`/api/company/internships/${id}/state`, { state });
-      closeDetail();
+      await openDetail(id);
       await loadRows();
     } catch (e: any) {
-      const msg = e?.response?.data?.message || 'Nepodarilo sa zmeniť stav.';
-      alert(msg);
-    }
-  }
-
-  async function removeInternship(id: number) {
-    const ok = window.confirm('Naozaj chcete vymazať túto prax? Táto akcia je nevratná.');
-    if (!ok) return;
-    try {
-      await api.delete(`/api/company/internships/${id}`);
-      if (selected?.id === id) closeDetail();
-      await loadRows();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message || 'Prax sa nepodarilo vymazať.';
+      const msg = e?.response?.data?.message || 'Nepodarilo sa zamietnuť prax.';
       alert(msg);
     }
   }
@@ -325,33 +301,7 @@ export default function DashboardCompany() {
                             {r.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right space-x-2">
-                          {r.status === 'Vytvorená' && (
-                            <>
-                              <Button
-                                size="sm"
-                                className="bg-green-700 hover:bg-green-800 text-white"
-                                onClick={() => approve(r.id)}
-                              >
-                                Schváliť
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="bg-green-100 text-green-800 hover:bg-green-200"
-                                onClick={() => reject(r.id)}
-                              >
-                                Zamietnuť
-                              </Button>
-                            </>
-                          )}
-
-                          {r.status === 'Schválená' && (
-                            <>
-                              
-                            </>
-                          )}
-
+                        <TableCell className="text-right">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -360,15 +310,6 @@ export default function DashboardCompany() {
                           >
                             Detail
                           </Button>
-
-    {/*                        <Button
-                            size="sm"
-                            variant="destructive"
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                            onClick={() => removeInternship(r.id)}
-                          >
-                            Vymazať
-                          </Button> */}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -387,8 +328,7 @@ export default function DashboardCompany() {
                 <h2 className="text-lg font-semibold text-green-900">Detail praxe</h2>
                 {selected && (
                   <p className="text-sm text-green-600">
-                    {selected.student_firstname} {selected.student_lastname} –{' '}
-                    {selected.program ?? '—'}
+                    {selected.student_firstname} {selected.student_lastname} – {selected.program ?? '—'}
                   </p>
                 )}
               </div>
@@ -412,9 +352,7 @@ export default function DashboardCompany() {
                       <p className="text-green-900">
                         {selected.student_firstname} {selected.student_lastname}
                       </p>
-                      <p className="text-green-600">
-                        {selected.student_email ?? 'bez emailu'}
-                      </p>
+                      <p className="text-green-600">{selected.student_email ?? 'bez emailu'}</p>
                     </div>
                     <div>
                       <p className="font-semibold text-green-700">Firma</p>
@@ -447,9 +385,7 @@ export default function DashboardCompany() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="font-semibold text-green-700">Odpracované hodiny</p>
-                      <p className="text-green-900">
-                        {selected.worked_hours ?? '—'}
-                      </p>
+                      <p className="text-green-900">{selected.worked_hours ?? '—'}</p>
                     </div>
                     <div>
                       <p className="font-semibold text-green-700">Stav</p>
@@ -470,12 +406,8 @@ export default function DashboardCompany() {
                         onChange={(e) => setContactMessage(e.target.value)}
                         placeholder="Napíšte správu garantovi…"
                       />
-                      {contactError && (
-                        <p className="text-xs text-red-600">{contactError}</p>
-                      )}
-                      {contactSuccess && (
-                        <p className="text-xs text-emerald-600">{contactSuccess}</p>
-                      )}
+                      {contactError && <p className="text-xs text-red-600">{contactError}</p>}
+                      {contactSuccess && <p className="text-xs text-emerald-600">{contactSuccess}</p>}
                       <Button
                         size="sm"
                         onClick={() => sendMessageToGarant(selected.id)}
@@ -487,81 +419,30 @@ export default function DashboardCompany() {
                     </div>
                   )}
 
-                  <div className="border-t pt-3 mt-2 flex flex-wrap gap=2">
-                    {ALL_STATES.includes(selected.status as any) && (
-                      <select
-                        className="border-green-300 text-green-800 rounded-md px-3 py-2 text-sm"
-                        value={pendingState}
-                        onChange={(e) => setPendingState(e.target.value)}
-                      >
-                        <option value="">Zmeniť stav…</option>
-                        {ALL_STATES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {pendingState && (
+                  {/* AKCIE FIRMY – iba v detaile */}
+                  {companyCanDecide && (
+                    <div className="border-t pt-3 mt-2 flex flex-wrap gap-2 justify-end">
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => changeState(selected.id, pendingState)}
-                        className="bg-green-100 text-green-800 hover:bg-green-200"
+                        className="bg-green-700 hover:bg-green-800 text-white"
+                        onClick={() => approve(selected.id)}
+                        disabled={selected.status === 'Potvrdená'}
+                        title={selected.status === 'Potvrdená' ? 'Prax je už potvrdená' : undefined}
                       >
-                        Uložiť stav
+                        Potvrdiť
                       </Button>
-                    )}
-
-                    {selected.status === 'Vytvorená' && (
-                      <>
-                        <Button
-                          size="sm"
-                          className="bg-green-700 hover:bg-green-800 text-white"
-                          onClick={() => approve(selected.id)}
-                        >
-                          Schváliť
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="bg-green-100 text-green-800 hover:bg-green-200"
-                          onClick={() => reject(selected.id)}
-                        >
-                          Zamietnuť
-                        </Button>
-                      </>
-                    )}
-
-                    {selected.status === 'Schválená' && (
-                      <>
-                  {/*      <Button
-                          size="sm"
-                          className="bg-green-700 hover:bg-green-800 text-white"
-                          onClick={() => grade(selected.id, true)}
-                        >
-                          Ohodnotiť: Prešiel
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="bg-green-100 text-green-800 hover:bg-green-200"
-                          onClick={() => grade(selected.id, false)}
-                        >
-                          Neprešiel
-                        </Button> */}
-                      </>
-                    )}
-
-  {/*                  <Button
-                      size="sm"
-                      variant="destructive"
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                      onClick={() => removeInternship(selected.id)}
-                    >
-                      Vymazať
-                    </Button> */}
-                  </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="bg-green-100 text-green-800 hover:bg-green-200"
+                        onClick={() => reject(selected.id)}
+                        disabled={selected.status === 'Zamietnutá'}
+                        title={selected.status === 'Zamietnutá' ? 'Prax je už zamietnutá' : undefined}
+                      >
+                        Zamietnuť
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

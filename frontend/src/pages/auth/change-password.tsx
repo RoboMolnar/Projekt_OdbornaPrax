@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { api } from '@/shared/apiClient';
 
 function goToDashboard(role?: string) {
@@ -13,7 +13,7 @@ function goToDashboard(role?: string) {
       window.location.href = '/dashboard-garant';
       return;
     default:
-      // keď nevieme rolu, radšej pošli na login než na landing
+      // keď nevieme rolu, pošli aspoň na login
       window.location.href = '/login';
   }
 }
@@ -35,49 +35,25 @@ async function fetchRoleFromMe(): Promise<string | undefined> {
   }
 }
 
-export default function ForcePassword() {
-  const [mustChange, setMustChange] = useState<boolean>(true);
+export default function ChangePassword() {
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await api.get('/api/password/force-change-check');
-
-        if (!r.data?.must_change_password) {
-          // 1) rola priamo z check endpointu
-          const roleFromCheck = r.data?.user?.role ?? r.data?.role;
-          if (roleFromCheck) return goToDashboard(roleFromCheck);
-
-          // 2) rola z localStorage (uložená pri logine/registrácii)
-          const roleFromStorage = getRoleFromStorage();
-          if (roleFromStorage) return goToDashboard(roleFromStorage);
-
-          // 3) rola z /api/me (ak existuje)
-          const roleFromMe = await fetchRoleFromMe();
-          return goToDashboard(roleFromMe);
-        }
-
-        setMustChange(true);
-      } catch (err: any) {
-        // ak je user neauth (401), pošli rovno na login
-        if (err?.response?.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
-        setMustChange(true);
-      }
-    })();
-  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setSuccess(null);
+
+    if (password !== confirm) {
+      setBusy(false);
+      setError('Nové heslo a potvrdenie hesla sa nezhodujú.');
+      return;
+    }
 
     try {
       const resp = await api.post('/api/password/force-change', {
@@ -85,6 +61,8 @@ export default function ForcePassword() {
         password,
         password_confirmation: confirm,
       });
+
+      setSuccess('Heslo bolo úspešne zmenené.');
 
       // 1) rola priamo z response (ak backend posiela)
       const roleFromResp = resp.data?.user?.role ?? resp.data?.role;
@@ -98,7 +76,7 @@ export default function ForcePassword() {
       const roleFromMe = await fetchRoleFromMe();
       return goToDashboard(roleFromMe);
     } catch (err: any) {
-      // keď po zmene hesla backend zneplatní token, tu často padne 401
+      // ak je user neauth (401), pošli rovno na login
       if (err?.response?.status === 401) {
         window.location.href = '/login';
         return;
@@ -111,6 +89,8 @@ export default function ForcePassword() {
         );
       } else if (resp?.message) {
         setError(resp.message);
+      } else if (resp?.errors?.current_password) {
+        setError('Aktuálne heslo nie je správne.');
       } else {
         setError('Zmena hesla zlyhala.');
       }
@@ -119,17 +99,23 @@ export default function ForcePassword() {
     }
   }
 
-  if (!mustChange) return null;
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-green-50 text-green-900 dark:bg-slate-900 dark:text-green-100 p-6">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-green-200 dark:border-green-800 rounded-2xl p-6 shadow-sm">
+        <button 
+            type="button" 
+            onClick={() => window.history.back()} 
+            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-green-300 px-3 py-2 text-green-800 hover:bg-green-50 dark:border-green-700 dark:text-green-100 dark:hover:bg-green-900"
+          >
+            Späť
+          </button>
+
         <h1 className="text-2xl font-bold text-center text-green-700 dark:text-green-300">
-          Zmena hesla
+          Zmeniť heslo
         </h1>
 
         <p className="mt-2 text-sm text-green-700 dark:text-green-200 text-center">
-          Pred pokračovaním si prosím nastav nové heslo.
+          Zadaj aktuálne heslo a nastav si nové heslo.
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
@@ -179,12 +165,13 @@ export default function ForcePassword() {
           </p>
 
           {error && <div className="text-sm text-rose-600 mt-2">{error}</div>}
+          {success && <div className="text-sm text-green-700 mt-2">{success}</div>}
 
           <button
             disabled={busy}
             className="w-full rounded-xl px-4 py-2 bg-green-700 text-white hover:shadow disabled:opacity-50 dark:bg-green-600"
           >
-            {busy ? 'Ukladám…' : 'Uložiť nové heslo'}
+            {busy ? 'Ukladám…' : 'Zmeniť heslo'}
           </button>
         </form>
       </div>

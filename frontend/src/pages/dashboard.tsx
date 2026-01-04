@@ -38,14 +38,16 @@ type PracticeDetail = {
 type Filter = { status: string; year: string; search: string; program: string };
 
 const STATUS_CLASSES: Record<string, string> = {
-  Vytvorená: 'border-green-300 text-green-700 bg-green-50',
+  Vytvorená: 'border-slate-300 text-slate-700 bg-slate-50',
+  Potvrdená: 'border-green-400 text-green-800 bg-green-50',
+  Zamietnutá: 'border-rose-300 text-rose-700 bg-rose-50',
   Schválená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
+  Neschválená: 'border-rose-300 text-rose-700 bg-rose-50',
   Obhájená: 'border-emerald-300 text-emerald-700 bg-emerald-50',
   Neobhájená: 'border-rose-300 text-rose-700 bg-rose-50',
-  Zamietnutá: 'border-rose-300 text-rose-700 bg-rose-50',
 };
 
-const ALL_STATES = ['Odoslaná na schválenie', 'Prebieha', 'Schválená', 'Ukončená', 'V návrhu', 'Zamietnutá', 'Zrušená'] as const;
+const ALL_STATES = ['Vytvorená', 'Potvrdená', 'Zamietnutá', 'Schválená', 'Neschválená', 'Obhájená', 'Neobhájená'] as const;
 
 export default function DashboardGarant() {
   const [rows, setRows] = useState<PracticeRow[]>([]);
@@ -65,7 +67,6 @@ export default function DashboardGarant() {
   const [selected, setSelected] = useState<PracticeDetail | null>(null);
 
   const [searchInput, setSearchInput] = useState('');
-  const [pendingState, setPendingState] = useState<string>(''); // pre dropdown v detaile
 
   useEffect(() => {
     const t = setTimeout(() => setFilter((f) => ({ ...f, search: searchInput })), 300);
@@ -103,11 +104,10 @@ export default function DashboardGarant() {
     setDetailLoading(true);
     setDetailError(null);
     setSelected(null);
-    setPendingState('');
+
     try {
       const res = await api.get<PracticeDetail>(`/api/garant/internships/${id}`);
       setSelected(res.data);
-      setPendingState(res.data.status); // predvyplniť aktuálny stav v dropdown-e
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'Nepodarilo sa načítať detail praxe.';
       setDetailError(msg);
@@ -120,59 +120,42 @@ export default function DashboardGarant() {
     setDetailOpen(false);
     setSelected(null);
     setDetailError(null);
-    setPendingState('');
+  }
+
+  async function refreshDetail(id: number) {
+    const res = await api.get<PracticeDetail>(`/api/garant/internships/${id}`);
+    setSelected(res.data);
   }
 
   async function approve(id: number) {
     try {
       await api.post(`/api/garant/internships/${id}/approve`);
-      closeDetail();
+      await refreshDetail(id);
       await loadRows();
-    } catch {
-      alert('Nepodarilo sa schváliť prax.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Nepodarilo sa schváliť prax.';
+      alert(msg);
     }
   }
 
   async function reject(id: number) {
     try {
       await api.post(`/api/garant/internships/${id}/reject`);
-      closeDetail();
+      await refreshDetail(id);
       await loadRows();
-    } catch {
-      alert('Nepodarilo sa zamietnuť prax.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Nepodarilo sa neschváliť prax.';
+      alert(msg);
     }
   }
 
   async function grade(id: number, passed: boolean) {
     try {
       await api.post(`/api/garant/internships/${id}/grade`, { passed });
-      closeDetail();
-      await loadRows();
-    } catch {
-      alert('Nepodarilo sa uložiť hodnotenie.');
-    }
-  }
-
-  async function changeState(id: number, state: string) {
-    try {
-      await api.patch(`/api/garant/internships/${id}/state`, { state });
-      closeDetail();
+      await refreshDetail(id);
       await loadRows();
     } catch (e: any) {
-      const msg = e?.response?.data?.message || 'Nepodarilo sa zmeniť stav.';
-      alert(msg);
-    }
-  }
-
-  async function removeInternship(id: number) {
-    const ok = window.confirm('Naozaj chcete vymazať túto prax? Táto akcia je nevratná.');
-    if (!ok) return;
-    try {
-      await api.delete(`/api/garant/internships/${id}`);
-      if (selected?.id === id) closeDetail();
-      await loadRows();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message || 'Prax sa nepodarilo vymazať.';
+      const msg = e?.response?.data?.message || 'Nepodarilo sa uložiť hodnotenie.';
       alert(msg);
     }
   }
@@ -186,6 +169,18 @@ export default function DashboardGarant() {
     () => Array.from(new Set(rows.map((r) => r.program).filter(Boolean))) as string[],
     [rows]
   );
+
+  // garant môže preklikávať Schválená <-> Neschválená, kým nie je ohodnotené
+  const canToggleDecision =
+    selected?.status === 'Potvrdená' ||
+    selected?.status === 'Schválená' ||
+    selected?.status === 'Neschválená';
+
+  // ✅ NOVÉ: ohodnotenie dovolíme aj keď už je Obhájená/Neobhájená
+  const canGrade =
+    selected?.status === 'Schválená' ||
+    selected?.status === 'Obhájená' ||
+    selected?.status === 'Neobhájená';
 
   return (
     <AppLayoutSpa breadcrumbs={[{ title: 'Dashboard garanta', href: '/dashboard' }]}>
@@ -214,13 +209,11 @@ export default function DashboardGarant() {
                 onChange={(e) => setFilter({ ...filter, status: e.target.value })}
               >
                 <option value="all">Všetky stavy</option>
-                <option value="Odoslaná na schválenie">Odoslaná na schválenie</option>
-                <option value="Prebieha">Prebieha</option>
-                <option value="Schválená">Schválená</option>
-                <option value="Ukončená">Neobhájená</option>
-                <option value="V návrhu">V návrhu</option>
-                <option value="Zamietnutá">Zamietnutá</option>
-                <option value="Zrušená">Zrušená</option>
+                {ALL_STATES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -288,45 +281,7 @@ export default function DashboardGarant() {
                             {r.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right space-x-2">
-                          {r.status === 'Vytvorená' && (
-                            <>
-                              <Button
-                                size="sm"
-                                className="bg-green-700 hover:bg-green-800 text-white"
-                                onClick={() => approve(r.id)}
-                              >
-                                Schváliť
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="bg-green-100 text-green-800 hover:bg-green-200"
-                                onClick={() => reject(r.id)}
-                              >
-                                Zamietnuť
-                              </Button>
-                            </>
-                          )}
-                          {r.status === 'Schválená' && (
-                            <>
-                              <Button
-                                size="sm"
-                                className="bg-green-700 hover:bg-green-800 text-white"
-                                onClick={() => grade(r.id, true)}
-                              >
-                                Ohodnotiť: Prešiel
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="bg-green-100 text-green-800 hover:bg-green-200"
-                                onClick={() => grade(r.id, false)}
-                              >
-                                Neprešiel
-                              </Button>
-                            </>
-                          )}
+                        <TableCell className="text-right">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -334,14 +289,6 @@ export default function DashboardGarant() {
                             onClick={() => openDetail(r.id)}
                           >
                             Detail
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                            onClick={() => removeInternship(r.id)}
-                          >
-                            Vymazať
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -359,7 +306,13 @@ export default function DashboardGarant() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-green-800">Detail praxe</h2>
-                <p className="text-sm text-green-600">Podrobné informácie o odbornej praxi.</p>
+                {selected ? (
+                  <p className="text-sm text-green-600">
+                    {selected.student_firstname} {selected.student_lastname} – {selected.company_name}
+                  </p>
+                ) : (
+                  <p className="text-sm text-green-600">Podrobné informácie o odbornej praxi.</p>
+                )}
               </div>
               <button
                 type="button"
@@ -383,9 +336,7 @@ export default function DashboardGarant() {
                       <p className="text-green-900">
                         {selected.student_firstname} {selected.student_lastname}
                         {selected.student_email ? (
-                          <span className="block text-green-600">
-                            {selected.student_email}
-                          </span>
+                          <span className="block text-green-600">{selected.student_email}</span>
                         ) : null}
                       </p>
                     </div>
@@ -399,9 +350,7 @@ export default function DashboardGarant() {
                     <p className="font-semibold text-green-700">Firma</p>
                     <p className="text-green-900">{selected.company_name}</p>
                     <p className="text-green-600">
-                      {[selected.street, selected.city, selected.zip, selected.country]
-                        .filter(Boolean)
-                        .join(', ') || '—'}
+                      {[selected.street, selected.city, selected.zip, selected.country].filter(Boolean).join(', ') || '—'}
                     </p>
                   </div>
 
@@ -435,80 +384,59 @@ export default function DashboardGarant() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end pt-2">
-                    <div className="md:col-span-2">
-                      <label className="block text-green-700 font-semibold mb-1">
-                        Zmeniť stav
-                      </label>
-                      <select
-                        className="w-full border border-green-300 rounded-md px-3 py-2 text-sm text-green-800"
-                        value={pendingState}
-                        onChange={(e) => setPendingState(e.target.value)}
-                      >
-                        {ALL_STATES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="mt-1 text-xs text-green-600">
-                        Uloženie stavu teraz automaticky zatvorí detail.
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        className="w-full bg-green-700 hover:bg-green-800 text-white"
-                        onClick={() => selected && changeState(selected.id, pendingState)}
-                        disabled={!pendingState || pendingState === selected.status}
-                      >
-                        Uložiť stav
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-4">
-                    {selected.status === 'Vytvorená' && (
-                      <>
+                  {/* AKCIE GARANTA – rozhodnutie (Schválená/Neschválená) */}
+                  {canToggleDecision && (
+                    <div className="border-t pt-3 mt-2 flex flex-wrap gap-2 justify-end">
+                      {selected.status !== 'Schválená' && (
                         <Button
+                          size="sm"
                           className="bg-green-700 hover:bg-green-800 text-white"
                           onClick={() => approve(selected.id)}
                         >
                           Schváliť
                         </Button>
+                      )}
+
+                      {selected.status !== 'Neschválená' && (
                         <Button
+                          size="sm"
                           variant="secondary"
                           className="bg-green-100 text-green-800 hover:bg-green-200"
                           onClick={() => reject(selected.id)}
                         >
-                          Zamietnuť
+                          Neschváliť
                         </Button>
-                      </>
-                    )}
-                    {selected.status === 'Schválená' && (
-                      <>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ✅ OHODNOTENIE – aj po finále (prepínanie Obhájená ↔ Neobhájená) */}
+                  {canGrade && (
+                    <div className="border-t pt-3 mt-2 flex flex-wrap gap-2 justify-end">
+                      {/* Ak je už Obhájená, zmysel má len prepnúť na Neobhájená */}
+                      {selected.status !== 'Obhájená' && (
                         <Button
+                          size="sm"
                           className="bg-green-700 hover:bg-green-800 text-white"
                           onClick={() => grade(selected.id, true)}
                         >
-                          Ohodnotiť: Prešiel
+                          Obhájená
                         </Button>
+                      )}
+
+                      {/* Ak je už Neobhájená, zmysel má len prepnúť na Obhájená */}
+                      {selected.status !== 'Neobhájená' && (
                         <Button
+                          size="sm"
                           variant="secondary"
                           className="bg-green-100 text-green-800 hover:bg-green-200"
                           onClick={() => grade(selected.id, false)}
                         >
-                          Neprešiel
+                          Neobhájená
                         </Button>
-                      </>
-                    )}
-                    <Button
-                      variant="destructive"
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                      onClick={() => removeInternship(selected.id)}
-                    >
-                      Vymazať
-                    </Button>
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

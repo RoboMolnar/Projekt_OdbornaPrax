@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Internship;
-use App\Models\InternshipState;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,9 +11,18 @@ use Illuminate\Support\Facades\DB;
 class InternshipController extends Controller
 {
     /**
-     * Zoznam praxí prihláseného študenta
-     * (používa sa v dashboardStudent.tsx – /api/student/internships).
+     * Alias pre zobrazenie stavu v UI:
+     * - DB stav "Schválená" sa má na FE zobrazovať ako "Prebieha"
      */
+    private function mapStatusForUi(?string $status): ?string
+    {
+        if ($status === null) {
+            return null;
+        }
+
+        return $status === 'Schválená' ? 'Prebieha' : $status;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -24,7 +31,6 @@ class InternshipController extends Controller
             return response()->json(['message' => 'Prístup povolený len pre študenta.'], 403);
         }
 
-        // join s company + internship_state, aby sme vedeli názov firmy a stav
         $rows = DB::table('internship')
             ->join('company', 'company.company_id', '=', 'internship.company_id')
             ->join('internship_state', 'internship_state.internship_state_id', '=', 'internship.state_id')
@@ -39,19 +45,14 @@ class InternshipController extends Controller
             ')
             ->get();
 
+        $rows = $rows->map(function ($row) {
+            $row->status = $this->mapStatusForUi($row->status);
+            return $row;
+        });
+
         return response()->json($rows);
     }
 
-    /**
-     * Vytvorenie novej praxe študentom
-     * (POST /api/student/internships).
-     *
-     * Očakáva payload:
-     *  {
-     *    company_name, street, city, zip, country,
-     *    start_date, end_date, year, semester, worked_hours
-     *  }
-     */
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -74,8 +75,25 @@ class InternshipController extends Controller
             'worked_hours' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $internshipId = DB::transaction(function () use ($data, $user) {
-            // 1) adresa firmy
+        // TVRDÁ BRZDA: ak sa stav nenašiel, request skončí a žiadny insert sa nespustí.
+        $stateId = DB::table('internship_state')
+            ->where('internship_state_name', 'Vytvorená')
+            ->value('internship_state_id');
+
+        if (!$stateId) {
+            // Bonus: vrátime aj to, aké stavy backend v tejto DB naozaj vidí.
+            $states = DB::table('internship_state')
+                ->orderBy('internship_state_id')
+                ->pluck('internship_state_name');
+
+            return response()->json([
+                'message' => 'Stav "Vytvorená" sa nenašiel v internship_state (v DB, ktorú používa backend).',
+                'db'      => config('database.connections.mysql.database'),
+                'states'  => $states,
+            ], 500);
+        }
+
+        $internshipId = DB::transaction(function () use ($data, $user, $stateId) {
             $addressId = null;
             if ($data['street'] || $data['city'] || $data['zip'] || $data['country']) {
                 $addressId = DB::table('address')->insertGetId([
@@ -86,7 +104,6 @@ class InternshipController extends Controller
                 ]);
             }
 
-            // 2) firma – ak existuje podľa názvu, použijeme ju, inak vytvoríme novú
             $company = DB::table('company')
                 ->where('company_name', $data['company_name'])
                 ->first();
@@ -107,16 +124,10 @@ class InternshipController extends Controller
                 ]);
             }
 
-            // 3) stav = "Vytvorená"
-            $state = InternshipState::where('internship_state_name', 'Vytvorená')->first();
-            $stateId = $state?->internship_state_id;
-
-            // 4) default garant – prvý user s rolou "garant" (ak neexistuje, použijeme ID študenta)
             $garantId = User::where('role', 'garant')->value('user_id') ?? $user->user_id;
 
-            // 5) samotná prax
             $now = now();
-            $internshipId = DB::table('internship')->insertGetId([
+            return DB::table('internship')->insertGetId([
                 'student_user_id' => $user->user_id,
                 'company_id'      => $companyId,
                 'garant_user_id'  => $garantId,
@@ -129,17 +140,11 @@ class InternshipController extends Controller
                 'created_at'      => $now,
                 'updated_at'      => $now,
             ]);
-
-            return $internshipId;
         });
 
         return response()->json(['id' => $internshipId], 201);
     }
 
-    /**
-     * Detail jednej praxe pre študenta
-     * (GET /api/student/internships/{internship}).
-     */
     public function show(Request $request, int $internship): JsonResponse
     {
         $user = $request->user();
@@ -173,6 +178,8 @@ class InternshipController extends Controller
         if (!$row) {
             return response()->json(['message' => 'Prax neexistuje alebo ti nepatrí.'], 404);
         }
+
+        $row->status = $this->mapStatusForUi($row->status);
 
         return response()->json($row);
     }
