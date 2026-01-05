@@ -113,6 +113,7 @@ class StudentInternshipController extends Controller
                 internship.internship_id as id,
                 company.company_name       as firm,
                 internship.year            as year,
+                internship.practice_type   as practice_type,
                 internship_state.internship_state_name as status
             ')
             ->get();
@@ -120,6 +121,10 @@ class StudentInternshipController extends Controller
         // UI alias: "Schválená" -> "Prebieha"
         $rows = $rows->map(function ($row) {
             $row->status = $this->mapStatusForUi($row->status);
+            // fallback, keby DB ešte nemala stĺpec (kým sa nemigruje)
+            if (!property_exists($row, 'practice_type') || !$row->practice_type) {
+                $row->practice_type = 'standard';
+            }
             return $row;
         });
 
@@ -134,6 +139,9 @@ class StudentInternshipController extends Controller
         $user = $this->requireStudent($request);
 
         $data = $request->validate([
+            // ✅ NOVÉ: typ praxe
+            'practice_type' => ['required', 'in:standard,employment'],
+
             'company_name' => ['required', 'string', 'max:120'],
             'street'       => ['nullable', 'string', 'max:80'],
             'city'         => ['required', 'string', 'max:60'],
@@ -185,7 +193,6 @@ class StudentInternshipController extends Controller
                 ->value('internship_state_id');
 
             if (!$stateId) {
-                // nech to padne kontrolovane, nie SQLSTATE
                 throw new \RuntimeException('Stav "Vytvorená" neexistuje v tabuľke internship_state.');
             }
 
@@ -195,6 +202,10 @@ class StudentInternshipController extends Controller
                 'student_user_id' => $user->user_id,
                 'company_id'      => $companyId,
                 'garant_user_id'  => 100,
+
+                // ✅ NOVÉ: typ praxe
+                'practice_type'   => $data['practice_type'],
+
                 'start_date'      => $data['start_date'],
                 'end_date'        => $data['end_date'],
                 'year'            => $data['year'],
@@ -227,30 +238,33 @@ class StudentInternshipController extends Controller
         $status = $this->mapStatusForUi($status);
 
         return response()->json([
-            'id'           => $internshipModel->internship_id,
-            'company_name' => $company?->company_name ?? '',
-            'street'       => $address?->street ?? null,
-            'city'         => $address?->city ?? null,
-            'zip'          => $address?->zip ?? null,
-            'country'      => $address?->country ?? null,
-            'start_date'   => $internshipModel->start_date,
-            'end_date'     => $internshipModel->end_date,
-            'year'         => (int) $internshipModel->year,
-            'semester'     => $internshipModel->semester,
-            'worked_hours' => $internshipModel->worked_hours,
-            'status'       => $status,
+            'id'            => $internshipModel->internship_id,
+
+            // ✅ NOVÉ
+            'practice_type' => $internshipModel->practice_type ?? 'standard',
+
+            'company_name'  => $company?->company_name ?? '',
+            'street'        => $address?->street ?? null,
+            'city'          => $address?->city ?? null,
+            'zip'           => $address?->zip ?? null,
+            'country'       => $address?->country ?? null,
+            'start_date'    => $internshipModel->start_date,
+            'end_date'      => $internshipModel->end_date,
+            'year'          => (int) $internshipModel->year,
+            'semester'      => $internshipModel->semester,
+            'worked_hours'  => $internshipModel->worked_hours,
+            'status'        => $status,
         ]);
     }
 
     /**
-     * EDIT praxe študentom (bez zmeny firmy a bez zmeny stavu).
+     * EDIT praxe študentom (bez zmeny firmy, stavu, typu praxe).
      * Upraviteľné: adresa, dátumy, rok, semester, odpracované hodiny.
      */
     public function update(Request $request, int $internship): JsonResponse
     {
         $internshipModel = $this->findOwnedInternship($request, $internship);
 
-        // voliteľné pravidlo: neumožniť edit pri finálnych stavoch
         $this->ensureEditableState($internshipModel);
 
         $data = $request->validate([
@@ -266,11 +280,16 @@ class StudentInternshipController extends Controller
             'worked_hours' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        // Bezpečnostná poistka: ignorujeme pokusy meniť firmu/stav
-        unset($data['company_name'], $data['company_id'], $data['state_id'], $data['status']);
+        // Bezpečnostná poistka: ignorujeme pokusy meniť firmu/stav/typ
+        unset(
+            $data['company_name'],
+            $data['company_id'],
+            $data['state_id'],
+            $data['status'],
+            $data['practice_type']
+        );
 
         DB::transaction(function () use ($data, $internshipModel) {
-            // update internship polia
             $internshipUpdate = [];
             foreach (['start_date', 'end_date', 'year', 'semester', 'worked_hours'] as $k) {
                 if (array_key_exists($k, $data)) {
@@ -285,7 +304,6 @@ class StudentInternshipController extends Controller
                     ->update($internshipUpdate);
             }
 
-            // update adresy firmy (pozri upozornenie hore – môže byť zdieľaná)
             $company = $internshipModel->company;
             if ($company) {
                 $addrUpdate = [];
@@ -303,7 +321,6 @@ class StudentInternshipController extends Controller
                             ->where('address_id', $company->address_id)
                             ->update($addrUpdate);
                     } else {
-                        // firma nemá adresu -> vytvoríme novú a pripojíme
                         $addrUpdate['created_at'] = now();
                         $newAddressId = DB::table('address')->insertGetId($addrUpdate);
 
@@ -318,7 +335,6 @@ class StudentInternshipController extends Controller
             }
         });
 
-        // vráť aktualizovaný detail v rovnakom formáte ako show()
         $fresh = Internship::with(['company.address', 'state'])
             ->where('internship_id', $internshipModel->internship_id)
             ->first();
@@ -331,18 +347,22 @@ class StudentInternshipController extends Controller
         $status = $this->mapStatusForUi($status);
 
         return response()->json([
-            'id'           => $fresh?->internship_id,
-            'company_name' => $company?->company_name ?? '',
-            'street'       => $address?->street ?? null,
-            'city'         => $address?->city ?? null,
-            'zip'          => $address?->zip ?? null,
-            'country'      => $address?->country ?? null,
-            'start_date'   => $fresh?->start_date,
-            'end_date'     => $fresh?->end_date,
-            'year'         => (int) ($fresh?->year ?? 0),
-            'semester'     => $fresh?->semester,
-            'worked_hours' => $fresh?->worked_hours,
-            'status'       => $status,
+            'id'            => $fresh?->internship_id,
+
+            // ✅ NOVÉ
+            'practice_type' => $fresh?->practice_type ?? 'standard',
+
+            'company_name'  => $company?->company_name ?? '',
+            'street'        => $address?->street ?? null,
+            'city'          => $address?->city ?? null,
+            'zip'           => $address?->zip ?? null,
+            'country'       => $address?->country ?? null,
+            'start_date'    => $fresh?->start_date,
+            'end_date'      => $fresh?->end_date,
+            'year'          => (int) ($fresh?->year ?? 0),
+            'semester'      => $fresh?->semester,
+            'worked_hours'  => $fresh?->worked_hours,
+            'status'        => $status,
         ]);
     }
 
@@ -353,7 +373,6 @@ class StudentInternshipController extends Controller
     {
         $internshipModel = $this->findOwnedInternship($request, $internship);
 
-        // voliteľné pravidlo: neumožniť zmazať pri finálnych stavoch
         $this->ensureEditableState($internshipModel);
 
         DB::table('internship')

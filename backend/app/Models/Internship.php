@@ -43,5 +43,9 @@ class Internship extends Model
 {
     return $this->belongsTo(InternshipState::class, 'state_id', 'internship_state_id');
 }
+public function documents()
+{
+    return $this->hasMany(\App\Models\Document::class, 'internship_id', 'internship_id');
+}
 
 }

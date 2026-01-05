@@ -7,10 +7,15 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Api\StudentInternshipController;
 use App\Http\Controllers\Api\GarantInternshipController;
 use App\Http\Controllers\Api\CompanyInternshipController;
+
 use App\Http\Controllers\Auth\RegisterCompanyController;
 use App\Http\Controllers\Auth\RegisterStudentController;
+
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordController;
+
+use App\Http\Controllers\Api\InternshipDocumentsController;
+use App\Http\Controllers\Api\DocumentDownloadController;
 
 Route::get('/health', function () {
     return response()->json([
@@ -51,10 +56,13 @@ Route::post('/password/reset-with-temp', [PasswordController::class, 'resetWithT
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Download dokumentu pre všetkých prihlásených (študent/garant/firma)
+    Route::get('/documents/{document}/download', [DocumentDownloadController::class, 'download']);
+
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | Info o prihlásenom používateľovi
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     Route::get('/user', function (Request $request) {
         $user = $request->user();
@@ -70,9 +78,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | Nútená zmena hesla (spoločné)
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     Route::get('/password/force-change-check', [PasswordController::class, 'check']);
     Route::post('/password/force-change', [PasswordController::class, 'update']);
@@ -80,21 +88,27 @@ Route::middleware('auth:sanctum')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| ŠTUDENT – praxe
+| ŠTUDENT – praxe + dokumenty
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
+
+    // dokumenty k praxi (študent)
+    Route::get('/student/internships/{internship}/documents', [InternshipDocumentsController::class, 'list']);
+    Route::post('/student/internships/{internship}/documents', [InternshipDocumentsController::class, 'upload']);
+    Route::delete('/student/documents/{document}', [InternshipDocumentsController::class, 'delete']);
+
+    // praxe
     Route::get('/student/internships', [StudentInternshipController::class, 'index']);
     Route::post('/student/internships', [StudentInternshipController::class, 'store']);
     Route::get('/student/internships/{internship}', [StudentInternshipController::class, 'show']);
     Route::patch('/student/internships/{internship}', [StudentInternshipController::class, 'update']);
     Route::delete('/student/internships/{internship}', [StudentInternshipController::class, 'destroy']);
 
-
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | FIRMY – zoznam pre študenta (výber firmy pri tvorbe praxe)
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     Route::get('/companies', function () {
         return DB::table('company')
@@ -114,12 +128,23 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| GARANT – praxe
+| GARANT – praxe + dokumenty
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:sanctum', 'role:garant'])->group(function () {
+
+    // dokumenty k praxi (garant)
+    Route::get('/garant/internships/{internship}/documents', [InternshipDocumentsController::class, 'listForGarant']);
+    Route::delete('/garant/documents/{document}', [InternshipDocumentsController::class, 'deleteForGarant']);
+
+    // export CSV (berie filter parametre)
+    Route::get('/garant/internships/export', [GarantInternshipController::class, 'exportCsv']);
+
+    // praxe
     Route::get('/garant/internships', [GarantInternshipController::class, 'indexAll']);
     Route::get('/garant/internships/{internship}', [GarantInternshipController::class, 'show']);
+    Route::patch('/garant/internships/{internship}', [GarantInternshipController::class, 'update']);
+
     Route::post('/garant/internships/{internship}/approve', [GarantInternshipController::class, 'approve']);
     Route::post('/garant/internships/{internship}/reject', [GarantInternshipController::class, 'reject']);
     Route::post('/garant/internships/{internship}/grade', [GarantInternshipController::class, 'grade']);
@@ -141,6 +166,16 @@ Route::middleware(['auth:sanctum', 'role:company'])->group(function () {
     Route::post('/company/internships/{internship}/grade', [CompanyInternshipController::class, 'grade']);
     Route::patch('/company/internships/{internship}/state', [CompanyInternshipController::class, 'setState']);
     Route::delete('/company/internships/{internship}', [CompanyInternshipController::class, 'destroy']);
+
+    // dokumenty k praxi (firma)
+Route::get('/company/internships/{internship}/documents', [InternshipDocumentsController::class, 'listForCompany']);
+Route::post('company/internships/{internship}/documents', [\App\Http\Controllers\Api\InternshipDocumentsController::class, 'uploadForCompany']);
+
+
+// firma potvrdí/zamietne výkaz (študentov)
+Route::post('/company/documents/{document}/report-approve', [InternshipDocumentsController::class, 'approveReportForCompany']);
+Route::post('/company/documents/{document}/report-reject', [InternshipDocumentsController::class, 'rejectReportForCompany']);
+
 
     Route::post(
         '/company/internships/{internship}/contact-garant',

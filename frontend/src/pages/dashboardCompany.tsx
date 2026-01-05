@@ -13,6 +13,7 @@ type PracticeRow = {
   program: string | null;
   year: number;
   status: string;
+  practice_type?: 'standard' | 'employment';
 };
 
 type PracticeDetail = {
@@ -21,21 +22,42 @@ type PracticeDetail = {
   student_lastname: string;
   student_email: string | null;
   program: string | null;
+
+  // ✅ typ praxe
+  practice_type?: 'standard' | 'employment';
+
   company_name: string;
   street: string | null;
   city: string | null;
   zip: string | null;
   country: string | null;
+
   start_date: string;
   end_date: string;
   year: number;
   semester: string | number;
   worked_hours: number | null;
   status: string;
+
   garant_email: string | null;
 };
 
 type Filter = { status: string; year: string; search: string; program: string };
+
+type DocRow = {
+  id: number;
+  type: string | null;
+  name: string;
+  invoice_period: string | null;
+  uploaded_at: string | null;
+
+  // company review fields (pre výkaz)
+  company_review_status?: 'pending' | 'approved' | 'rejected' | null;
+  company_reviewed_at?: string | null;
+  company_review_note?: string | null;
+};
+
+type DocsCompliance = { required: boolean; ok: boolean; reason: string | null };
 
 const STATUS_CLASSES: Record<string, string> = {
   Odoslaná_na_schválenie: 'border-green-300 text-green-700 bg-green-50',
@@ -55,6 +77,28 @@ const STATUS_CLASSES: Record<string, string> = {
 const ALL_STATES = ['Vytvorená', 'Potvrdená', 'Zamietnutá'] as const;
 
 const breadcrumbs = [{ title: 'Dashboard firmy', href: '/dashboard-company' }];
+
+// ⚠️ nastav podľa tvojej DB hodnoty v document_type.document_type_name pre výkaz
+const REPORT_DOC_TYPE = 'PRACTICE_REPORT';
+
+// ✅ NOVÉ: endpoint na upload výkazu firmou (backend čo sme riešili)
+function companyUploadEndpoint(internshipId: number) {
+  return `/api/company/internships/${internshipId}/documents`;
+}
+
+function reportStatusLabel(s?: DocRow['company_review_status']) {
+  if (!s || s === 'pending') return 'Čaká na rozhodnutie firmy';
+  if (s === 'approved') return 'Potvrdený firmou';
+  if (s === 'rejected') return 'Zamietnutý firmou';
+  return '—';
+}
+
+function reportStatusBadgeClass(s?: DocRow['company_review_status']) {
+  if (!s || s === 'pending') return 'border-amber-300 text-amber-800 bg-amber-50';
+  if (s === 'approved') return 'border-emerald-300 text-emerald-800 bg-emerald-50';
+  if (s === 'rejected') return 'border-rose-300 text-rose-800 bg-rose-50';
+  return 'border-slate-200 text-slate-700 bg-slate-50';
+}
 
 export default function DashboardCompany() {
   const [rows, setRows] = useState<PracticeRow[]>([]);
@@ -80,9 +124,18 @@ export default function DashboardCompany() {
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
 
+  // --- Docs in detail
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
+  const [docsCompliance, setDocsCompliance] = useState<DocsCompliance | null>(null);
+
+  // ✅ NOVÉ: upload výkazu firmou
+  const [companyReportFile, setCompanyReportFile] = useState<File | null>(null);
+  const [companyReportBusy, setCompanyReportBusy] = useState(false);
+
   // --- UI helper: kedy má firma vidieť tlačidlá v detaile
-  const companyCanDecide =
-    selected && ['Vytvorená', 'Potvrdená', 'Zamietnutá'].includes(selected.status);
+  const companyCanDecide = selected && ['Vytvorená', 'Potvrdená', 'Zamietnutá'].includes(selected.status);
 
   useEffect(() => {
     const t = setTimeout(() => setFilter((f) => ({ ...f, search: searchInput })), 300);
@@ -118,18 +171,69 @@ export default function DashboardCompany() {
     loadRows();
   }, [filter.status, filter.year, filter.program, filter.search]);
 
+  async function loadDocs(internshipId: number) {
+    setDocsLoading(true);
+    setDocsError(null);
+    try {
+      const res = await api.get(`/api/company/internships/${internshipId}/documents`);
+      setDocs((res.data?.documents || []) as DocRow[]);
+      setDocsCompliance((res.data?.employment_compliance || null) as DocsCompliance | null);
+    } catch (e: any) {
+      setDocsError(e?.response?.data?.message || 'Nepodarilo sa načítať doklady.');
+    } finally {
+      setDocsLoading(false);
+    }
+  }
+
+  // ✅ NOVÉ: firma uploadne výkaz -> backend to uloží rovno ako approved
+  async function uploadCompanyReport(internshipId: number) {
+    if (!companyReportFile) return;
+
+    setCompanyReportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('type', REPORT_DOC_TYPE);
+      fd.append('file', companyReportFile);
+
+      await api.post(companyUploadEndpoint(internshipId), fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setCompanyReportFile(null);
+      await loadDocs(internshipId);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Nepodarilo sa nahrať výkaz.');
+    } finally {
+      setCompanyReportBusy(false);
+    }
+  }
+
   async function openDetail(id: number) {
     setDetailOpen(true);
     setDetailLoading(true);
     setDetailError(null);
     setSelected(null);
+
+    // reset kontakt
     setContactMessage('');
     setContactError(null);
     setContactSuccess(null);
 
+    // reset docs
+    setDocs([]);
+    setDocsCompliance(null);
+    setDocsError(null);
+
+    // reset upload výkazu firmou
+    setCompanyReportFile(null);
+    setCompanyReportBusy(false);
+
     try {
       const res = await api.get<PracticeDetail>(`/api/company/internships/${id}`);
       setSelected(res.data);
+
+      // načítaj doklady pre detail
+      await loadDocs(id);
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'Nepodarilo sa načítať detail praxe.';
       setDetailError(msg);
@@ -142,15 +246,22 @@ export default function DashboardCompany() {
     setDetailOpen(false);
     setSelected(null);
     setDetailError(null);
+
     setContactMessage('');
     setContactError(null);
     setContactSuccess(null);
+
+    setDocs([]);
+    setDocsCompliance(null);
+    setDocsError(null);
+
+    setCompanyReportFile(null);
+    setCompanyReportBusy(false);
   }
 
   async function approve(id: number) {
     try {
       await api.post(`/api/company/internships/${id}/approve`);
-      // refresh detail
       await openDetail(id);
       await loadRows();
     } catch (e: any) {
@@ -194,15 +305,58 @@ export default function DashboardCompany() {
     }
   }
 
-  const years = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.year))).sort((a, b) => b - a),
-    [rows]
-  );
+  async function downloadDoc(documentId: number) {
+    try {
+      const res = await api.get(`/api/documents/${documentId}/download`, { responseType: 'blob' });
 
-  const programs = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.program).filter(Boolean))) as string[],
-    [rows]
-  );
+      let filename = `document_${documentId}`;
+      const dispo = res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'];
+      if (dispo) {
+        const match = /filename\*?=(?:UTF-8''|")?([^";\n]+)"?/i.exec(dispo);
+        if (match?.[1]) filename = decodeURIComponent(match[1].replace(/"/g, '').trim());
+      }
+
+      const contentType = res.headers?.['content-type'] || 'application/octet-stream';
+      const blob = new Blob([res.data], { type: contentType });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Nepodarilo sa stiahnuť súbor.');
+    }
+  }
+
+  async function approveReport(documentId: number) {
+    if (!selected) return;
+    try {
+      await api.post(`/api/company/documents/${documentId}/report-approve`, { note: null });
+      await loadDocs(selected.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Nepodarilo sa potvrdiť výkaz.');
+    }
+  }
+
+  async function rejectReport(documentId: number) {
+    if (!selected) return;
+    const note = window.prompt('Dôvod zamietnutia (voliteľné):') ?? '';
+    try {
+      await api.post(`/api/company/documents/${documentId}/report-reject`, {
+        note: note.trim() ? note.trim() : null,
+      });
+      await loadDocs(selected.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Nepodarilo sa zamietnuť výkaz.');
+    }
+  }
+
+  const years = useMemo(() => Array.from(new Set(rows.map((r) => r.year))).sort((a, b) => b - a), [rows]);
+  const programs = useMemo(() => Array.from(new Set(rows.map((r) => r.program).filter(Boolean))) as string[], [rows]);
 
   return (
     <AppLayoutSpa breadcrumbs={breadcrumbs}>
@@ -266,6 +420,7 @@ export default function DashboardCompany() {
             </div>
 
             {error && <p className="text-red-600">{error}</p>}
+
             {!error && (
               <Table>
                 <TableHeader>
@@ -283,23 +438,30 @@ export default function DashboardCompany() {
                       <TableCell colSpan={5}>Načítavam…</TableCell>
                     </TableRow>
                   )}
+
                   {!loading && rows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5}>Žiadne praxe sa nenašli.</TableCell>
                     </TableRow>
                   )}
+
                   {!loading &&
                     rows.map((r) => (
                       <TableRow key={r.id} className="hover:bg-green-50">
                         <TableCell>
                           <span className="text-green-900">{r.student || '—'}</span>
+
+                          {/* ✅ BADGE: zamestnanie */}
+                          {r.practice_type === 'employment' && (
+                            <span className="ml-2 text-xs font-medium text-green-800 bg-green-100 border border-green-200 rounded px-2 py-0.5">
+                              Zamestnanie
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>{r.program ?? '—'}</TableCell>
                         <TableCell>{r.year}</TableCell>
                         <TableCell>
-                          <Badge className={STATUS_CLASSES[r.status] || 'border-green-300'}>
-                            {r.status}
-                          </Badge>
+                          <Badge className={STATUS_CLASSES[r.status] || 'border-green-300'}>{r.status}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -322,21 +484,27 @@ export default function DashboardCompany() {
 
       {detailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-green-200 p-6">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-green-200 p-6 max-h-[85vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-green-900">Detail praxe</h2>
+                <h2 className="text-lg font-semibold text-green-900">
+                  Detail praxe
+                  {/* ✅ BADGE: zamestnanie aj v detaile */}
+                  {selected?.practice_type === 'employment' && (
+                    <span className="ml-2 text-xs font-medium text-green-800 bg-green-100 border border-green-200 rounded px-2 py-0.5">
+                      Zamestnanie
+                    </span>
+                  )}
+                </h2>
+
                 {selected && (
                   <p className="text-sm text-green-600">
                     {selected.student_firstname} {selected.student_lastname} – {selected.program ?? '—'}
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                className="text-sm text-green-600 hover:text-green-800"
-                onClick={closeDetail}
-              >
+
+              <button type="button" className="text-sm text-green-600 hover:text-green-800" onClick={closeDetail}>
                 Zavrieť
               </button>
             </div>
@@ -344,6 +512,7 @@ export default function DashboardCompany() {
             <div className="mt-4">
               {detailLoading && <p>Načítavam detail…</p>}
               {detailError && <p className="text-red-600">{detailError}</p>}
+
               {!detailLoading && selected && !detailError && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
@@ -354,13 +523,19 @@ export default function DashboardCompany() {
                       </p>
                       <p className="text-green-600">{selected.student_email ?? 'bez emailu'}</p>
                     </div>
+
                     <div>
                       <p className="font-semibold text-green-700">Firma</p>
-                      <p className="text-green-900">{selected.company_name}</p>
+                      <p className="text-green-900">
+                        {selected.company_name}
+                        {selected.practice_type === 'employment' && (
+                          <span className="ml-2 text-xs font-medium text-green-800 bg-green-100 border border-green-200 rounded px-2 py-0.5">
+                            Zamestnanie
+                          </span>
+                        )}
+                      </p>
                       <p className="text-green-600">
-                        {[selected.street, selected.city, selected.zip, selected.country]
-                          .filter(Boolean)
-                          .join(', ') || '—'}
+                        {[selected.street, selected.city, selected.zip, selected.country].filter(Boolean).join(', ') || '—'}
                       </p>
                     </div>
                   </div>
@@ -393,12 +568,109 @@ export default function DashboardCompany() {
                     </div>
                   </div>
 
+                  {/* ✅ NOVÉ: Upload výkazu firmou (automaticky approved) */}
+                  <div className="border-t pt-3 mt-3 space-y-2">
+                    <p className="font-semibold text-green-800">Nahrať výkaz firmou</p>
+                    <p className="text-xs text-green-700">
+                      Po nahratí sa výkaz automaticky označí ako <span className="font-medium">potvrdený firmou</span>.
+                    </p>
+
+                    <div className="flex flex-col md:flex-row gap-2 md:items-center">
+                      <Input type="file" onChange={(e) => setCompanyReportFile(e.target.files?.[0] ?? null)} />
+                      <Button
+                        type="button"
+                        onClick={() => uploadCompanyReport(selected.id)}
+                        disabled={!companyReportFile || companyReportBusy}
+                        className="bg-green-700 hover:bg-green-800 text-white"
+                      >
+                        {companyReportBusy ? 'Nahrávam…' : 'Nahrať výkaz'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* ✅ DOKLADY – firma vidí zmluvu/výkaz/faktúry + stiahnuť,
+                      a iba pre výkaz má potvrdiť/zamietnuť */}
+                  <div className="border-t pt-3 mt-3 space-y-2">
+                    <p className="font-semibold text-green-800">Doklady</p>
+
+                    {docsCompliance && selected.practice_type === 'employment' && (
+                      <p className={docsCompliance.ok ? 'text-green-700' : 'text-rose-700'}>
+                        {docsCompliance.ok ? `✅ Splnené: ${docsCompliance.reason}` : `❌ Nesplnené: ${docsCompliance.reason}`}
+                      </p>
+                    )}
+
+                    {docsLoading && <p className="text-green-700">Načítavam doklady…</p>}
+                    {docsError && <p className="text-red-600">{docsError}</p>}
+
+                    <div className="space-y-1">
+                      {docs.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Zatiaľ nie sú nahraté žiadne doklady.</p>
+                      ) : (
+                        docs.map((d) => {
+                          const isReport = d.type === REPORT_DOC_TYPE;
+
+                          return (
+                            <div key={d.id} className="flex items-start justify-between gap-2 border rounded-md px-3 py-2">
+                              <div className="text-sm">
+                                <div className="font-medium text-green-900">{d.name}</div>
+                                <div className="text-green-700">
+                                  {d.type}
+                                  {d.invoice_period ? ` • ${d.invoice_period}` : ''}
+                                  {d.uploaded_at ? ` • ${d.uploaded_at}` : ''}
+                                </div>
+
+                                {isReport && (
+                                  <div className="mt-1">
+                                    <Badge className={reportStatusBadgeClass(d.company_review_status)}>
+                                      {reportStatusLabel(d.company_review_status)}
+                                    </Badge>
+                                    {d.company_review_note ? (
+                                      <div className="text-xs text-green-700 mt-1">Poznámka: {d.company_review_note}</div>
+                                    ) : null}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col gap-2 items-end">
+                                <Button variant="outline" size="sm" onClick={() => downloadDoc(d.id)}>
+                                  Stiahnuť
+                                </Button>
+
+                                {isReport && (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      className="bg-green-700 hover:bg-green-800 text-white"
+                                      onClick={() => approveReport(d.id)}
+                                      disabled={d.company_review_status === 'approved'}
+                                      title={d.company_review_status === 'approved' ? 'Výkaz je už potvrdený' : undefined}
+                                    >
+                                      Potvrdiť výkaz
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="bg-green-100 text-green-800 hover:bg-green-200"
+                                      onClick={() => rejectReport(d.id)}
+                                      disabled={d.company_review_status === 'rejected'}
+                                      title={d.company_review_status === 'rejected' ? 'Výkaz je už zamietnutý' : undefined}
+                                    >
+                                      Zamietnuť výkaz
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
                   {selected.garant_email && (
                     <div className="border-t pt-3 mt-2 space-y-2">
                       <p className="font-semibold text-green-700">Kontaktovať garanta</p>
-                      <p className="text-xs text-green-600">
-                        Správa bude odoslaná na: {selected.garant_email}
-                      </p>
+                      <p className="text-xs text-green-600">Správa bude odoslaná na: {selected.garant_email}</p>
                       <textarea
                         className="w-full rounded-md border border-green-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                         rows={3}
