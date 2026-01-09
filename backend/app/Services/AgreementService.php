@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
-use PhpOffice\PhpWord\TemplateProcessor;
-use Symfony\Component\Process\Process;
 
 class AgreementService
 {
@@ -24,20 +24,19 @@ class AgreementService
     private function ensureGeneratedUnlocked(int $internshipId): string
     {
         $cfg = config('agreement');
-        $templatePath = $cfg['template'] ?? null;
-        $outDir = trim((string)($cfg['output_dir'] ?? 'private/agreements'), '/');
+        $view = (string) ($cfg['view'] ?? 'agreements.standard');
+        $viewPath = $cfg['view_path'] ?? null;
+        $outDir = trim((string) ($cfg['output_dir'] ?? 'agreements'), '/');
 
-        if (!$templatePath || !is_file($templatePath)) {
-            throw new \RuntimeException("Agreement template not found at: {$templatePath}");
+        if ($viewPath && !is_file($viewPath)) {
+            throw new \RuntimeException("Agreement view not found at: {$viewPath}");
         }
 
-        // subquery: vyber "prvého" company používateľa pre firmu (aby nevznikali duplicity)
         $cuMin = DB::table('users')
             ->selectRaw('MIN(user_id) as user_id, company_id')
             ->where('role', 'company')
             ->groupBy('company_id');
 
-        // --- Načítaj prax + firmu + adresu firmy + študenta + (company user z registrácie) ---
         $q = DB::table('internship as i')
             ->join('company as c', 'c.company_id', '=', 'i.company_id')
             ->leftJoin('address as ca', 'ca.address_id', '=', 'c.address_id')
@@ -48,24 +47,20 @@ class AgreementService
             ->leftJoin('users as cu', 'cu.user_id', '=', 'cu_min.user_id')
             ->where('i.internship_id', $internshipId)
             ->select([
-                // internship
                 'i.internship_id',
                 'i.practice_type',
                 'i.start_date',
                 'i.end_date',
                 'i.updated_at',
 
-                // company
                 'c.company_id',
                 'c.company_name',
 
-                // company address
                 'ca.street as company_street',
                 'ca.city as company_city',
                 'ca.zip as company_zip',
                 'ca.country as company_country',
 
-                // student
                 'u.user_id as student_user_id',
                 'u.email as student_email',
                 'u.first_name as student_first_name',
@@ -73,20 +68,16 @@ class AgreementService
                 'u.phone_number as student_phone_number',
                 'u.study_type as study_type',
 
-                // company user (osoba z registrácie firmy)
                 'cu.first_name as company_user_first_name',
                 'cu.last_name as company_user_last_name',
             ]);
 
-        // ✅ pozícia: preferuj users.position, fallback na users.title (aby sa nič nerozbilo v starších DB)
         if (Schema::hasColumn('users', 'position')) {
             $q->addSelect('cu.position as company_user_position');
         } else {
-            // fallback
             $q->addSelect('cu.title as company_user_position');
         }
 
-        // študentova adresa cez address_id (u teba existuje)
         if (Schema::hasColumn('users', 'address_id')) {
             $q->leftJoin('address as sa', 'sa.address_id', '=', 'u.address_id')
                 ->addSelect([
@@ -107,33 +98,28 @@ class AgreementService
             throw new \RuntimeException('Agreement is only for standard practice_type.');
         }
 
-        // --- Cesty ---
         Storage::disk('local')->makeDirectory($outDir);
 
-        $pdfRelative  = "{$outDir}/agreement_{$internshipId}.pdf";
-        $docxRelative = "{$outDir}/agreement_{$internshipId}.docx";
+        $pdfRelative = "{$outDir}/agreement_{$internshipId}.pdf";
 
-        // --- Ak PDF existuje a je novšie než updated_at alebo šablóna, nechaj ho ---
         if (Storage::disk('local')->exists($pdfRelative)) {
             $pdfMtime = Storage::disk('local')->lastModified($pdfRelative);
             $updatedAt = $row->updated_at ? Carbon::parse($row->updated_at)->timestamp : 0;
-            $tplMtime = @filemtime($templatePath) ?: 0;
+            $tplMtime = $viewPath && is_file($viewPath) ? (@filemtime($viewPath) ?: 0) : 0;
 
             if ($pdfMtime >= max($updatedAt, $tplMtime)) {
                 return $pdfRelative;
             }
         }
 
-        // --- Poskladaj hodnoty do placeholderov ---
         $studentFullName = $this->buildStudentName($row);
-        $studentPhone = (string)($row->student_phone_number ?? '');
+        $studentPhone = (string) ($row->student_phone_number ?? '');
 
         $studentAddress = $this->buildStudentAddress($row);
         $companyAddress = $this->buildCompanyAddress($row);
 
-        // osoba firmy + pozícia (CEO/konateľ/...)
-        $companyPersonName = trim((string)($row->company_user_first_name ?? '') . ' ' . (string)($row->company_user_last_name ?? ''));
-        $companyPersonPosition = trim((string)($row->company_user_position ?? ''));
+        $companyPersonName = trim((string) ($row->company_user_first_name ?? '') . ' ' . (string) ($row->company_user_last_name ?? ''));
+        $companyPersonPosition = trim((string) ($row->company_user_position ?? ''));
 
         $companyRepresentative = $companyPersonName;
         if ($companyPersonPosition !== '') {
@@ -142,72 +128,51 @@ class AgreementService
 
         $now = Carbon::now();
         $start = $this->fmtDate($row->start_date);
-        $end   = $this->fmtDate($row->end_date);
+        $end = $this->fmtDate($row->end_date);
 
-        $tpl = new TemplateProcessor($templatePath);
+        $data = [
+            'company_name_address' => $companyAddress,
+            'company_representative' => $companyRepresentative,
+            'student_fullname' => $studentFullName ?: '',
+            'student_address' => $studentAddress ?: '',
+            'student_email' => (string) ($row->student_email ?? ''),
+            'student_phone' => $studentPhone,
+            'study_type' => 'aplikovaná informatika',
+            'company_name' => (string) ($row->company_name ?? ''),
+            'start_date' => $start,
+            'end_date' => $end,
+            'company_tutor_acc' => $companyPersonName,
+            'date_nitra' => $now->format('d.m.Y'),
+            'company_city' => (string) ($row->company_city ?? ''),
+            'date_company' => $now->format('d.m.Y'),
+            'company_signer_name' => $companyPersonName,
+        ];
 
-        // ✅ Plný názov a adresa: LEN firma + adresa (bez osoby)
-        $tpl->setValue('COMPANY_NAME_ADDRESS', $companyAddress);
-
-        // ✅ v zastúpení: osoba + (pozícia)
-        $tpl->setValue('COMPANY_REPRESENTATIVE', $companyRepresentative);
-
-        $tpl->setValue('STUDENT_FULLNAME', $studentFullName ?: '');
-        $tpl->setValue('STUDENT_ADDRESS', $studentAddress ?: '');
-        $tpl->setValue('STUDENT_EMAIL', (string)($row->student_email ?? ''));
-        $tpl->setValue('STUDENT_PHONE', $studentPhone);
-
-        // študijný program vždy "Aplikovaná informatika"
-        $tpl->setValue('STUDY_TYPE', 'aplikovaná informatika');
-
-        $tpl->setValue('COMPANY_NAME', (string)($row->company_name ?? ''));
-        $tpl->setValue('START_DATE', $start);
-        $tpl->setValue('END_DATE', $end);
-
-        // tútor – meno a priezvisko z registrácie firmy
-        $tpl->setValue('COMPANY_TUTOR_ACC', $companyPersonName);
-
-        $tpl->setValue('DATE_NITRA', $now->format('d.m.Y'));
-        $tpl->setValue('COMPANY_CITY', (string)($row->company_city ?? ''));
-        $tpl->setValue('DATE_COMPANY', $now->format('d.m.Y'));
-
-        // podpisujúci – meno a priezvisko (bez pozície)
-        $tpl->setValue('COMPANY_SIGNER_NAME', $companyPersonName);
-
-        // --- Ulož DOCX ---
-        $docxAbs = Storage::disk('local')->path($docxRelative);
-        $tpl->saveAs($docxAbs);
-
-        // --- Konverzia na PDF cez LibreOffice ---
-        $this->convertDocxToPdf($docxAbs, Storage::disk('local')->path($outDir));
+        $pdfAbs = Storage::disk('local')->path($pdfRelative);
+        $this->renderPdf($view, $data, $pdfAbs);
 
         if (!Storage::disk('local')->exists($pdfRelative)) {
-            throw new \RuntimeException('PDF conversion failed (output pdf missing).');
+            throw new \RuntimeException('PDF generation failed (output pdf missing).');
         }
 
         return $pdfRelative;
     }
 
-    private function convertDocxToPdf(string $docxAbs, string $outDirAbs): void
+    private function renderPdf(string $view, array $data, string $pdfAbs): void
     {
-        $soffice = config('agreement.libreoffice_path') ?: 'soffice';
+        $html = view($view, $data)->render();
 
-        $process = new Process([
-            $soffice,
-            '--headless',
-            '--nologo',
-            '--nofirststartwizard',
-            '--convert-to', 'pdf',
-            '--outdir', $outDirAbs,
-            $docxAbs,
-        ]);
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', true);
 
-        $process->setTimeout(60);
-        $process->run();
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('A4');
+        $dompdf->render();
 
-        if (!$process->isSuccessful()) {
-            throw new \RuntimeException('LibreOffice convert failed: ' . $process->getErrorOutput());
-        }
+        file_put_contents($pdfAbs, $dompdf->output());
     }
 
     private function fmtDate($val): string
@@ -219,23 +184,18 @@ class AgreementService
     private function buildStudentName(object $row): string
     {
         $first = $row->student_first_name ?? null;
-        $last  = $row->student_last_name ?? null;
+        $last = $row->student_last_name ?? null;
 
-        $full = trim(implode(' ', array_filter([(string)$first, (string)$last])));
-        return $full !== '' ? $full : (string)($row->student_email ?? '');
+        $full = trim(implode(' ', array_filter([(string) $first, (string) $last])));
+        return $full !== '' ? $full : (string) ($row->student_email ?? '');
     }
 
-    /**
-     * Formálna adresa na 2 riadky:
-     * 1) ulica a číslo
-     * 2) PSČ Mesto, Štát
-     */
     private function buildStudentAddress(object $row): string
     {
-        $street  = trim((string)($row->student_street ?? ''));
-        $city    = trim((string)($row->student_city ?? ''));
-        $zip     = trim((string)($row->student_zip ?? ''));
-        $country = trim((string)($row->student_country ?? ''));
+        $street = trim((string) ($row->student_street ?? ''));
+        $city = trim((string) ($row->student_city ?? ''));
+        $zip = trim((string) ($row->student_zip ?? ''));
+        $country = trim((string) ($row->student_country ?? ''));
 
         $line1 = $street;
 
@@ -249,17 +209,13 @@ class AgreementService
         return trim(implode("\n", array_filter([$line1, $line2])));
     }
 
-    /**
-     * Firma + adresa v jednom riadku pre placeholder COMPANY_NAME_ADDRESS:
-     * "Názov firmy, Ulica a číslo, PSČ Mesto, Štát"
-     */
     private function buildCompanyAddress(object $row): string
     {
-        $name    = trim((string)($row->company_name ?? ''));
-        $street  = trim((string)($row->company_street ?? ''));
-        $city    = trim((string)($row->company_city ?? ''));
-        $zip     = trim((string)($row->company_zip ?? ''));
-        $country = trim((string)($row->company_country ?? ''));
+        $name = trim((string) ($row->company_name ?? ''));
+        $street = trim((string) ($row->company_street ?? ''));
+        $city = trim((string) ($row->company_city ?? ''));
+        $zip = trim((string) ($row->company_zip ?? ''));
+        $country = trim((string) ($row->company_country ?? ''));
 
         $zipCity = trim(implode(' ', array_filter([$zip, $city])));
 
@@ -268,7 +224,7 @@ class AgreementService
             $street,
             $zipCity,
             $country,
-        ], fn($v) => trim((string)$v) !== '');
+        ], fn($v) => trim((string) $v) !== '');
 
         return implode(', ', $parts);
     }
