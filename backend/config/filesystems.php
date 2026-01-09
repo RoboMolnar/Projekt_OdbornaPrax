@@ -60,6 +60,12 @@ return [
             'report' => false,
         ],
 
+        'agreements' => [
+        'driver' => 'local',
+        'root' => storage_path('app/agreements'),
+        'throw' => false, // môžeš dať true ak chceš výnimky pri problémoch
+        ],
+
     ],
 
     /*

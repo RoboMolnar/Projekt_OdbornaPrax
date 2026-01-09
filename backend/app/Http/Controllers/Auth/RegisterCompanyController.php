@@ -22,19 +22,38 @@ class RegisterCompanyController extends Controller
                 'last_name'    => ['required', 'string', 'max:100'],
                 'email'        => ['required', 'email', 'max:255', 'unique:users,email'],
                 'phone_number' => ['required', 'string', 'max:50'],
+
+                // ✅ NOVÉ: pozícia kontaktnej osoby (CEO/konateľ/...)
+                'position'     => ['required', 'string', 'max:255'],
+
                 'company_name' => ['nullable', 'string', 'max:255'],
                 'ico'          => ['required', 'string', 'max:45'],
                 'dic'          => ['required', 'string', 'max:45'],
+
+                // ✅ povinná adresa firmy
+                'street'       => ['required', 'string', 'max:255'],
+                'city'         => ['required', 'string', 'max:255'],
+                'zip'          => ['required', 'string', 'max:20'],
+                'country'      => ['required', 'string', 'max:255'],
             ],
             [
-                'first_name.required'   => 'Meno je povinné.',
-                'last_name.required'    => 'Priezvisko je povinné.',
-                'email.required'        => 'E-mail je povinný.',
-                'email.email'           => 'Zadajte platný e-mail.',
-                'email.unique'          => 'Tento e-mail už je zaregistrovaný.',
-                'phone_number.required' => 'Telefónne číslo je povinné.',
-                'ico.required'          => 'IČO je povinné.',
-                'dic.required'          => 'DIČ je povinné.',
+                'first_name.required'    => 'Meno je povinné.',
+                'last_name.required'     => 'Priezvisko je povinné.',
+                'email.required'         => 'E-mail je povinný.',
+                'email.email'            => 'Neplatný formát e-mailu.',
+                'email.unique'           => 'E-mail už existuje.',
+                'phone_number.required'  => 'Telefón je povinný.',
+
+                // ✅ NOVÉ
+                'position.required'      => 'Pozícia je povinná.',
+
+                'ico.required'           => 'IČO je povinné.',
+                'dic.required'           => 'DIČ je povinné.',
+
+                'street.required'        => 'Ulica je povinná.',
+                'city.required'          => 'Mesto je povinné.',
+                'zip.required'           => 'PSČ je povinné.',
+                'country.required'       => 'Štát je povinný.',
             ]
         );
 
@@ -46,13 +65,23 @@ class RegisterCompanyController extends Controller
             if ($existing) {
                 $companyId = $existing->company_id;
             } else {
+                // ✅ vytvor adresu a napoj firmu na address_id
+                $addressId = DB::table('address')->insertGetId([
+                    'street'     => $data['street'],
+                    'city'       => $data['city'],
+                    'zip'        => $data['zip'],
+                    'country'    => $data['country'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
                 $companyId = DB::table('company')->insertGetId([
                     'company_name'  => $data['company_name'] ?? ($data['first_name'] . ' ' . $data['last_name']),
                     'ico'           => $data['ico'],
                     'dic'           => $data['dic'],
                     'email'         => $data['email'],
                     'phone_contact' => $data['phone_number'],
-                    'address_id'    => null,
+                    'address_id'    => $addressId,
                     'created_at'    => now(),
                     'updated_at'    => now(),
                 ], 'company_id');
@@ -68,15 +97,20 @@ class RegisterCompanyController extends Controller
                 'last_name'            => $data['last_name'],
                 'email'                => $data['email'],
                 'phone_number'         => $data['phone_number'],
+
+                // ✅ NOVÉ
+                'position'             => $data['position'],
+
                 'password'             => Hash::make($plain),
                 'active'               => 0,
                 'must_change_password' => 1,
-                'company_id'           => $companyId, // ✅ prepojenie user -> company
+                'company_id'           => $companyId,
             ]);
 
+            // 4) aktivačný link
             $activationUrl = URL::temporarySignedRoute(
                 'company.activate',
-                now()->addHours(72),
+                now()->addMinutes(60),
                 ['user' => $user->user_id]
             );
 

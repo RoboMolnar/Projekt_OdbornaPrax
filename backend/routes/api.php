@@ -16,6 +16,9 @@ use App\Http\Controllers\Api\PasswordController;
 
 use App\Http\Controllers\Api\InternshipDocumentsController;
 use App\Http\Controllers\Api\DocumentDownloadController;
+use App\Http\Controllers\Api\CompanySearchController;
+
+use App\Http\Controllers\Api\AgreementController;
 
 Route::get('/health', function () {
     return response()->json([
@@ -91,7 +94,45 @@ Route::middleware('auth:sanctum')->group(function () {
 | ŠTUDENT – praxe + dokumenty
 |--------------------------------------------------------------------------
 */
+
+Route::middleware('auth:sanctum')->get(
+    '/internships/{internship}/agreement',
+    [AgreementController::class, 'download']
+);
 Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
+
+    /*
+    |----------------------------------------------------------------------
+    | FIRMY – fulltext search (iba aktivované firmy)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/companies/search', [CompanySearchController::class, 'search']);
+
+    /*
+    |----------------------------------------------------------------------
+    | FIRMY – zoznam (iba aktivované firmy) – ak niekde používaš
+    |----------------------------------------------------------------------
+    */
+    Route::get('/companies', function () {
+        return DB::table('company')
+            ->join('users', function ($join) {
+                $join->on('users.company_id', '=', 'company.company_id')
+                    ->where('users.role', '=', 'company')
+                    ->where('users.active', '=', 1);
+            })
+            ->leftJoin('address', 'address.address_id', '=', 'company.address_id')
+            ->orderBy('company.company_name')
+            ->select([
+                'company.company_id as company_id',
+                'company.company_name as company_name',
+                'address.street',
+                'address.city',
+                'address.zip',
+                'address.country',
+            ])
+            ->distinct()
+            ->get();
+    });
 
     // dokumenty k praxi (študent)
     Route::get('/student/internships/{internship}/documents', [InternshipDocumentsController::class, 'list']);
@@ -104,26 +145,6 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
     Route::get('/student/internships/{internship}', [StudentInternshipController::class, 'show']);
     Route::patch('/student/internships/{internship}', [StudentInternshipController::class, 'update']);
     Route::delete('/student/internships/{internship}', [StudentInternshipController::class, 'destroy']);
-
-    /*
-    |----------------------------------------------------------------------
-    | FIRMY – zoznam pre študenta (výber firmy pri tvorbe praxe)
-    |----------------------------------------------------------------------
-    */
-    Route::get('/companies', function () {
-        return DB::table('company')
-            ->leftJoin('address', 'address.address_id', '=', 'company.address_id')
-            ->orderBy('company.company_name')
-            ->select([
-                'company.company_id as company_id',
-                'company.company_name as company_name',
-                'address.street',
-                'address.city',
-                'address.zip',
-                'address.country',
-            ])
-            ->get();
-    });
 });
 
 /*
@@ -168,14 +189,12 @@ Route::middleware(['auth:sanctum', 'role:company'])->group(function () {
     Route::delete('/company/internships/{internship}', [CompanyInternshipController::class, 'destroy']);
 
     // dokumenty k praxi (firma)
-Route::get('/company/internships/{internship}/documents', [InternshipDocumentsController::class, 'listForCompany']);
-Route::post('company/internships/{internship}/documents', [\App\Http\Controllers\Api\InternshipDocumentsController::class, 'uploadForCompany']);
+    Route::get('/company/internships/{internship}/documents', [InternshipDocumentsController::class, 'listForCompany']);
+    Route::post('/company/internships/{internship}/documents', [InternshipDocumentsController::class, 'uploadForCompany']);
 
-
-// firma potvrdí/zamietne výkaz (študentov)
-Route::post('/company/documents/{document}/report-approve', [InternshipDocumentsController::class, 'approveReportForCompany']);
-Route::post('/company/documents/{document}/report-reject', [InternshipDocumentsController::class, 'rejectReportForCompany']);
-
+    // firma potvrdí/zamietne výkaz (študentov)
+    Route::post('/company/documents/{document}/report-approve', [InternshipDocumentsController::class, 'approveReportForCompany']);
+    Route::post('/company/documents/{document}/report-reject', [InternshipDocumentsController::class, 'rejectReportForCompany']);
 
     Route::post(
         '/company/internships/{internship}/contact-garant',

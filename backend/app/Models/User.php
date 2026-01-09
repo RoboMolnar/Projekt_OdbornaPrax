@@ -24,7 +24,8 @@ class User extends Authenticatable
         'password',
         'first_name',
         'last_name',
-        'phone_number',         // <- toto musí sedieť s DB
+        'phone_number',        // <- toto musí sedieť s DB
+        'position',
         'address_id',
         'department_id',
         'field_of_study_id',
@@ -33,6 +34,7 @@ class User extends Authenticatable
         'title',
         'year_of_study',
         'study_type',
+        'alternative_email',
     ];
 
     protected $hidden = [

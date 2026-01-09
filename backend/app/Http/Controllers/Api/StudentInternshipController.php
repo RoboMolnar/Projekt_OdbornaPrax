@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Internship;
-use App\Models\InternshipState;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\AgreementService;
 
 class StudentInternshipController extends Controller
 {
@@ -17,91 +17,13 @@ class StudentInternshipController extends Controller
      */
     private function mapStatusForUi(?string $status): ?string
     {
-        if ($status === null) {
-            return null;
-        }
-
+        if ($status === null) return null;
         return $status === 'Schválená' ? 'Prebieha' : $status;
     }
 
-    /**
-     * Vráti prihláseného usera a overí, že je študent.
-     * - 401 ak nie je prihlásený
-     * - 403 ak nie je študent
-     */
-    private function requireStudent(Request $request)
-    {
-        $user = $request->user(); // route je pod auth:sanctum
-
-        if (!$user) {
-            abort(response()->json(['message' => 'Neprihlásený používateľ.'], 401));
-        }
-
-        $rawRole =
-            $user->role
-            ?? $user->role_name
-            ?? $user->type
-            ?? null;
-
-        $role = $rawRole !== null ? strtolower(trim((string) $rawRole)) : null;
-
-        if ($role !== 'student') {
-            abort(response()->json(['message' => 'Prístup povolený len pre študenta.'], 403));
-        }
-
-        return $user;
-    }
-
-    /**
-     * Načíta prax patriacu prihlásenému študentovi alebo vráti 404.
-     */
-    private function findOwnedInternship(Request $request, int $internshipId): Internship
-    {
-        $user = $this->requireStudent($request);
-
-        $internship = Internship::with(['company.address', 'state'])
-            ->where('internship_id', $internshipId)
-            ->where('student_user_id', $user->user_id)
-            ->first();
-
-        if (!$internship) {
-            abort(response()->json(['message' => 'Prax neexistuje alebo ti nepatrí.'], 404));
-        }
-
-        return $internship;
-    }
-
-    /**
-     * (Voliteľné) obmedzenie edit/mazania podľa stavu.
-     * Podľa nového workflow:
-     * - študent môže upravovať iba v stave "Vytvorená"
-     * - po potvrdení/zamietnutí/schválení a finálnych stavoch už neupravuje
-     */
-    private function ensureEditableState(Internship $internship): void
-    {
-        $stateName = $internship->state?->internship_state_name;
-
-        // Blokované stavy (už nie je možné upravovať)
-        $blocked = [
-            'Potvrdená',
-            'Zamietnutá',
-            'Schválená',
-            'Neschválená',
-            'Obhájená',
-            'Neobhájená',
-        ];
-
-        if ($stateName && in_array($stateName, $blocked, true)) {
-            abort(response()->json(['message' => 'Túto prax už nie je možné upravovať.'], 422));
-        }
-    }
-
-    /**
-     * Zoznam praxí prihláseného študenta.
-     */
     public function index(Request $request): JsonResponse
     {
-        $user = $this->requireStudent($request);
+        $user = $request->user();
 
         $rows = DB::table('internship')
             ->join('company', 'company.company_id', '=', 'internship.company_id')
@@ -111,20 +33,15 @@ class StudentInternshipController extends Controller
             ->orderByDesc('internship.internship_id')
             ->selectRaw('
                 internship.internship_id as id,
-                company.company_name       as firm,
-                internship.year            as year,
-                internship.practice_type   as practice_type,
+                company.company_name      as firm,
+                internship.year           as year,
+                internship.practice_type  as practice_type,
                 internship_state.internship_state_name as status
             ')
             ->get();
 
-        // UI alias: "Schválená" -> "Prebieha"
         $rows = $rows->map(function ($row) {
             $row->status = $this->mapStatusForUi($row->status);
-            // fallback, keby DB ešte nemala stĺpec (kým sa nemigruje)
-            if (!property_exists($row, 'practice_type') || !$row->practice_type) {
-                $row->practice_type = 'standard';
-            }
             return $row;
         });
 
@@ -132,253 +49,203 @@ class StudentInternshipController extends Controller
     }
 
     /**
-     * Študent vytvorí novú prax.
+     * ✅ NOVÁ PRAX: výber firmy (company_id), dátumy, rok, semester...
+     * ✅ Firma musí byť aktivovaná: users.role='company' AND users.active=1
      */
     public function store(Request $request): JsonResponse
     {
-        $user = $this->requireStudent($request);
+        $user = $request->user();
 
-        $data = $request->validate([
-            // ✅ NOVÉ: typ praxe
-            'practice_type' => ['required', 'in:standard,employment'],
+        $data = $request->validate(
+            [
+                'practice_type' => ['required', 'in:standard,employment'],
+                'company_id'    => ['required', 'integer'],
 
-            'company_name' => ['required', 'string', 'max:120'],
-            'street'       => ['nullable', 'string', 'max:80'],
-            'city'         => ['required', 'string', 'max:60'],
-            'zip'          => ['nullable', 'string', 'max:15'],
-            'country'      => ['nullable', 'string', 'max:60'],
+                'start_date'    => ['required', 'date'],
+                'end_date'      => ['required', 'date', 'after_or_equal:start_date'],
+                'year'          => ['required', 'integer', 'min:2000', 'max:2100'],
+                'semester'      => ['required', 'in:1,2'],
+                'worked_hours'  => ['nullable', 'integer', 'min:0'],
+            ],
+            [
+                'company_id.required' => 'Firma je povinná.',
+                'practice_type.required' => 'Typ praxe je povinný.',
+            ]
+        );
 
-            'start_date'   => ['required', 'date'],
-            'end_date'     => ['required', 'date', 'after_or_equal:start_date'],
-            'year'         => ['required', 'integer'],
-            'semester'     => ['required', 'in:1,2'],
-            'worked_hours' => ['nullable', 'integer', 'min:0'],
-        ]);
+        // ✅ firma musí existovať a byť aktivovaná
+        $companyOk = DB::table('company')
+            ->join('users', function ($join) {
+                $join->on('users.company_id', '=', 'company.company_id')
+                    ->where('users.role', '=', 'company')
+                    ->where('users.active', '=', 1);
+            })
+            ->where('company.company_id', $data['company_id'])
+            ->exists();
 
-        $internshipId = DB::transaction(function () use ($data, $user) {
-            // 1) adresa firmy
-            $addressId = null;
-            if ($data['street'] || $data['city'] || $data['zip'] || $data['country']) {
-                $addressId = DB::table('address')->insertGetId([
-                    'street'  => $data['street']  ?: null,
-                    'city'    => $data['city']    ?: null,
-                    'zip'     => $data['zip']     ?: null,
-                    'country' => $data['country'] ?: null,
-                ]);
-            }
+        if (!$companyOk) {
+            return response()->json([
+                'message' => 'Vybraná firma neexistuje alebo nie je aktivovaná.',
+                'errors' => ['company_id' => ['Vybraná firma neexistuje alebo nie je aktivovaná.']],
+            ], 422);
+        }
 
-            // 2) firma podla nazvu
-            $company = DB::table('company')
-                ->where('company_name', $data['company_name'])
-                ->first();
+        // stav "Vytvorená"
+        $stateId = DB::table('internship_state')
+            ->where('internship_state_name', 'Vytvorená')
+            ->value('internship_state_id');
 
-            if ($company) {
-                $companyId = $company->company_id;
-            } else {
-                $now = now();
-                $companyId = DB::table('company')->insertGetId([
-                    'company_name'  => $data['company_name'],
-                    'ico'           => null,
-                    'dic'           => null,
-                    'email'         => null,
-                    'phone_contact' => null,
-                    'address_id'    => $addressId,
-                    'created_at'    => $now,
-                    'updated_at'    => $now,
-                ]);
-            }
+        if (!$stateId) {
+            $states = DB::table('internship_state')
+                ->orderBy('internship_state_id')
+                ->pluck('internship_state_name');
 
-            // 3) stav = "Vytvorená" (podľa nového workflow)
-            $stateId = InternshipState::where('internship_state_name', 'Vytvorená')
-                ->value('internship_state_id');
+            return response()->json([
+                'message' => 'Stav "Vytvorená" sa nenašiel v internship_state (DB backendu).',
+                'db'      => config('database.connections.mysql.database'),
+                'states'  => $states,
+            ], 500);
+        }
 
-            if (!$stateId) {
-                throw new \RuntimeException('Stav "Vytvorená" neexistuje v tabuľke internship_state.');
-            }
+        $internshipId = DB::transaction(function () use ($data, $user, $stateId) {
 
-            // 4) ulozenie praxe
+            // garant - prvý garant, ak existuje
+            $garantId = User::where('role', 'garant')->value('user_id') ?? null;
+
             $now = now();
-            return DB::table('internship')->insertGetId([
-                'student_user_id' => $user->user_id,
-                'company_id'      => $companyId,
-                'garant_user_id'  => 100,
 
-                // ✅ NOVÉ: typ praxe
+            $internshipId = DB::table('internship')->insertGetId([
+                'student_user_id' => $user->user_id,
+                'company_id'      => $data['company_id'],
                 'practice_type'   => $data['practice_type'],
+
+                'garant_user_id'  => $garantId,
 
                 'start_date'      => $data['start_date'],
                 'end_date'        => $data['end_date'],
                 'year'            => $data['year'],
                 'semester'        => $data['semester'],
-                'worked_hours'    => $data['worked_hours'] ?? null,
+
+                'worked_hours'    => $data['worked_hours'] ?? 0,
+
                 'state_id'        => $stateId,
+
                 'created_at'      => $now,
                 'updated_at'      => $now,
+            ], 'internship_id');
+
+            // log zmeny stavu
+            DB::table('internship_state_change')->insert([
+                'internship_id'      => $internshipId,
+                'from_state_id'      => null,
+                'to_state_id'        => $stateId,
+                'changed_by_user_id' => $user->user_id,
+                'note'               => 'Vytvorenie praxe',
+                'changed_at'         => $now,
             ]);
+
+            return $internshipId;
         });
 
-        return response()->json([
-            'message' => 'Prax bola vytvorená.',
-            'internship_id' => $internshipId,
-        ], 201);
+        // ✅ DOPLNENÉ: po vytvorení štandardnej praxe skús vygenerovať dohodu
+        if (($data['practice_type'] ?? null) === 'standard') {
+            try {
+                app(AgreementService::class)->ensureGenerated((int)$internshipId);
+            } catch (\Throwable $e) {
+                report($e); // nech to nezablokuje vytvorenie praxe
+            }
+        }
+
+        return response()->json(['id' => $internshipId], 201);
     }
 
-    /**
-     * Detail praxe pre študenta.
-     */
     public function show(Request $request, int $internship): JsonResponse
     {
-        $internshipModel = $this->findOwnedInternship($request, $internship);
+        $user = $request->user();
 
-        $company = $internshipModel->company;
-        $address = $company?->address;
-        $state   = $internshipModel->state;
+        $row = DB::table('internship')
+            ->join('company', 'company.company_id', '=', 'internship.company_id')
+            ->leftJoin('address', 'address.address_id', '=', 'company.address_id')
+            ->join('internship_state', 'internship_state.internship_state_id', '=', 'internship.state_id')
+            ->where('internship.internship_id', $internship)
+            ->where('internship.student_user_id', $user->user_id)
+            ->selectRaw('
+                internship.practice_type as practice_type,
+                internship.internship_id as id,
+                company.company_name       as company_name,
+                address.street             as street,
+                address.city               as city,
+                address.zip                as zip,
+                address.country            as country,
+                internship.start_date      as start_date,
+                internship.end_date        as end_date,
+                internship.year            as year,
+                internship.semester        as semester,
+                internship.worked_hours    as worked_hours,
+                internship_state.internship_state_name as status
+            ')
+            ->first();
 
-        $status = $state?->internship_state_name ?? '—';
-        $status = $this->mapStatusForUi($status);
+        if (!$row) {
+            return response()->json(['message' => 'Prax neexistuje alebo ti nepatrí.'], 404);
+        }
 
-        return response()->json([
-            'id'            => $internshipModel->internship_id,
+        $row->status = $this->mapStatusForUi($row->status);
 
-            // ✅ NOVÉ
-            'practice_type' => $internshipModel->practice_type ?? 'standard',
-
-            'company_name'  => $company?->company_name ?? '',
-            'street'        => $address?->street ?? null,
-            'city'          => $address?->city ?? null,
-            'zip'           => $address?->zip ?? null,
-            'country'       => $address?->country ?? null,
-            'start_date'    => $internshipModel->start_date,
-            'end_date'      => $internshipModel->end_date,
-            'year'          => (int) $internshipModel->year,
-            'semester'      => $internshipModel->semester,
-            'worked_hours'  => $internshipModel->worked_hours,
-            'status'        => $status,
-        ]);
+        return response()->json($row);
     }
 
-    /**
-     * EDIT praxe študentom (bez zmeny firmy, stavu, typu praxe).
-     * Upraviteľné: adresa, dátumy, rok, semester, odpracované hodiny.
-     */
     public function update(Request $request, int $internship): JsonResponse
     {
-        $internshipModel = $this->findOwnedInternship($request, $internship);
-
-        $this->ensureEditableState($internshipModel);
+        $user = $request->user();
 
         $data = $request->validate([
-            'street'       => ['nullable', 'string', 'max:80'],
-            'city'         => ['nullable', 'string', 'max:60'],
-            'zip'          => ['nullable', 'string', 'max:15'],
-            'country'      => ['nullable', 'string', 'max:60'],
-
-            'start_date'   => ['sometimes', 'date'],
-            'end_date'     => ['sometimes', 'date', 'after_or_equal:start_date'],
-            'year'         => ['sometimes', 'integer'],
-            'semester'     => ['sometimes', 'in:1,2'],
+            'start_date'   => ['required', 'date'],
+            'end_date'     => ['required', 'date', 'after_or_equal:start_date'],
+            'year'         => ['required', 'integer', 'min:2000', 'max:2100'],
+            'semester'     => ['required', 'in:1,2'],
             'worked_hours' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        // Bezpečnostná poistka: ignorujeme pokusy meniť firmu/stav/typ
-        unset(
-            $data['company_name'],
-            $data['company_id'],
-            $data['state_id'],
-            $data['status'],
-            $data['practice_type']
-        );
+        $exists = DB::table('internship')
+            ->where('internship_id', $internship)
+            ->where('student_user_id', $user->user_id)
+            ->exists();
 
-        DB::transaction(function () use ($data, $internshipModel) {
-            $internshipUpdate = [];
-            foreach (['start_date', 'end_date', 'year', 'semester', 'worked_hours'] as $k) {
-                if (array_key_exists($k, $data)) {
-                    $internshipUpdate[$k] = $data[$k];
-                }
-            }
-
-            if (!empty($internshipUpdate)) {
-                $internshipUpdate['updated_at'] = now();
-                DB::table('internship')
-                    ->where('internship_id', $internshipModel->internship_id)
-                    ->update($internshipUpdate);
-            }
-
-            $company = $internshipModel->company;
-            if ($company) {
-                $addrUpdate = [];
-                foreach (['street', 'city', 'zip', 'country'] as $k) {
-                    if (array_key_exists($k, $data)) {
-                        $addrUpdate[$k] = $data[$k];
-                    }
-                }
-
-                if (!empty($addrUpdate)) {
-                    $addrUpdate['updated_at'] = now();
-
-                    if ($company->address_id) {
-                        DB::table('address')
-                            ->where('address_id', $company->address_id)
-                            ->update($addrUpdate);
-                    } else {
-                        $addrUpdate['created_at'] = now();
-                        $newAddressId = DB::table('address')->insertGetId($addrUpdate);
-
-                        DB::table('company')
-                            ->where('company_id', $company->company_id)
-                            ->update([
-                                'address_id' => $newAddressId,
-                                'updated_at' => now(),
-                            ]);
-                    }
-                }
-            }
-        });
-
-        $fresh = Internship::with(['company.address', 'state'])
-            ->where('internship_id', $internshipModel->internship_id)
-            ->first();
-
-        $company = $fresh?->company;
-        $address = $company?->address;
-        $state   = $fresh?->state;
-
-        $status = $state?->internship_state_name ?? '—';
-        $status = $this->mapStatusForUi($status);
-
-        return response()->json([
-            'id'            => $fresh?->internship_id,
-
-            // ✅ NOVÉ
-            'practice_type' => $fresh?->practice_type ?? 'standard',
-
-            'company_name'  => $company?->company_name ?? '',
-            'street'        => $address?->street ?? null,
-            'city'          => $address?->city ?? null,
-            'zip'           => $address?->zip ?? null,
-            'country'       => $address?->country ?? null,
-            'start_date'    => $fresh?->start_date,
-            'end_date'      => $fresh?->end_date,
-            'year'          => (int) ($fresh?->year ?? 0),
-            'semester'      => $fresh?->semester,
-            'worked_hours'  => $fresh?->worked_hours,
-            'status'        => $status,
-        ]);
-    }
-
-    /**
-     * ZMAZANIE praxe študentom.
-     */
-    public function destroy(Request $request, int $internship): JsonResponse
-    {
-        $internshipModel = $this->findOwnedInternship($request, $internship);
-
-        $this->ensureEditableState($internshipModel);
+        if (!$exists) {
+            return response()->json(['message' => 'Prax neexistuje alebo ti nepatrí.'], 404);
+        }
 
         DB::table('internship')
-            ->where('internship_id', $internshipModel->internship_id)
-            ->delete();
+            ->where('internship_id', $internship)
+            ->update([
+                'start_date'   => $data['start_date'],
+                'end_date'     => $data['end_date'],
+                'year'         => $data['year'],
+                'semester'     => $data['semester'],
+                'worked_hours' => $data['worked_hours'] ?? 0,
+                'updated_at'   => now(),
+            ]);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['message' => 'Uložené.']);
+    }
+
+    public function destroy(Request $request, int $internship): JsonResponse
+    {
+        $user = $request->user();
+
+        $exists = DB::table('internship')
+            ->where('internship_id', $internship)
+            ->where('student_user_id', $user->user_id)
+            ->exists();
+
+        if (!$exists) {
+            return response()->json(['message' => 'Prax neexistuje alebo ti nepatrí.'], 404);
+        }
+
+        DB::table('internship_state_change')->where('internship_id', $internship)->delete();
+        DB::table('internship')->where('internship_id', $internship)->delete();
+
+        return response()->json(['message' => 'Zmazané.']);
     }
 }

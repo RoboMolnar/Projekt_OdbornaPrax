@@ -50,6 +50,15 @@ type DocRow = {
   company_review_note?: string | null;
 };
 
+type CompanySearchItem = {
+  company_id: number;
+  company_name: string;
+  street?: string | null;
+  city?: string | null;
+  zip?: string | null;
+  country?: string | null;
+};
+
 const breadcrumbs = [{ title: 'Dashboard študenta', href: '/dashboard-student' }];
 
 // rovnaké farbičky ako na garantovi (môžeš skopírovať aj do ďalších dashboardov)
@@ -70,19 +79,25 @@ export default function DashboardStudent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState<boolean>(false);
 
+  // ✅ FORM pre "Nová prax" - už len výber firmy + dátumy/rok/semester
   const [form, setForm] = useState({
     practice_type: 'standard' as 'standard' | 'employment',
-    company_name: '',
-    street: '',
-    city: '',
-    zip: '',
-    country: 'Slovensko',
+
+    // ✅ firma sa vyberá zo zoznamu
+    company_query: '',
+    company_id: null as number | null,
+
     start_date: '',
     end_date: '',
     year: new Date().getFullYear().toString(),
     semester: '1',
     worked_hours: '',
   });
+
+  // ✅ fulltext vyhľadávanie firiem
+  const [companyResults, setCompanyResults] = useState<CompanySearchItem[]>([]);
+  const [companySearchLoading, setCompanySearchLoading] = useState(false);
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -147,24 +162,79 @@ export default function DashboardStudent() {
     }
   }
 
+  // ✅ debounce search pre firmy (fulltext)
+  useEffect(() => {
+    if (!companyDropdownOpen) return;
+
+    const q = (form.company_query || '').trim();
+    const t = setTimeout(async () => {
+      if (q.length < 2) {
+        setCompanyResults([]);
+        return;
+      }
+
+      setCompanySearchLoading(true);
+      try {
+        const res = await api.get(`/api/companies/search?q=${encodeURIComponent(q)}`);
+
+        // server môže vrátiť {data:[...]} alebo priamo [...]
+        const payload = res.data as any;
+        const items: CompanySearchItem[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+
+        setCompanyResults(items);
+      } catch {
+        setCompanyResults([]);
+      } finally {
+        setCompanySearchLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
+  }, [form.company_query, companyDropdownOpen]);
+
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function handleCompanyQueryChange(e: ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setForm((prev) => ({
+      ...prev,
+      company_query: value,
+      company_id: null, // ✅ ak začne písať, výber sa zruší
+    }));
+    setCompanyDropdownOpen(true);
+  }
+
+  function selectCompany(c: CompanySearchItem) {
+    setForm((prev) => ({
+      ...prev,
+      company_query: c.company_name,
+      company_id: c.company_id,
+    }));
+    setCompanyDropdownOpen(false);
+    setCompanyResults([]);
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
 
+    // ✅ firma je povinná a musí byť vybratá zo zoznamu
+    if (!form.company_id) {
+      setFormError('Firma je povinná – musíš ju vybrať zo zoznamu.');
+      return;
+    }
+
     try {
       await api.post('/api/student/internships', {
         practice_type: form.practice_type,
-
-        company_name: form.company_name,
-        street: form.street || null,
-        city: form.city,
-        zip: form.zip || null,
-        country: form.country || null,
+        company_id: form.company_id,
         start_date: form.start_date,
         end_date: form.end_date,
         year: Number(form.year),
@@ -175,10 +245,8 @@ export default function DashboardStudent() {
       setForm((prev) => ({
         ...prev,
         practice_type: 'standard',
-        company_name: '',
-        street: '',
-        city: '',
-        zip: '',
+        company_query: '',
+        company_id: null,
         start_date: '',
         end_date: '',
         worked_hours: '',
@@ -289,6 +357,46 @@ export default function DashboardStudent() {
       alert(e?.response?.data?.message || 'Nepodarilo sa stiahnuť súbor.');
     }
   }
+
+  async function downloadAgreement(internshipId: number) {
+  try {
+    const res = await api.get(`/api/internships/${internshipId}/agreement`, {
+      responseType: 'blob',
+    });
+
+    let filename = `Dohoda_o_odbornej_praxi.pdf`;
+    const dispo = res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'];
+    if (dispo) {
+      const match = /filename\*?=(?:UTF-8''|")?([^";\n]+)"?/i.exec(dispo);
+      if (match?.[1]) filename = decodeURIComponent(match[1].replace(/"/g, '').trim());
+    }
+
+    const contentType = res.headers?.['content-type'] || 'application/pdf';
+    const blob = new Blob([res.data], { type: contentType });
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e: any) {
+    // keď príde JSON chyba ako blob, vytiahni message
+    const data = e?.response?.data;
+    if (data instanceof Blob) {
+      const text = await data.text().catch(() => '');
+      try {
+        const j = JSON.parse(text);
+        alert(j?.message || 'Nepodarilo sa stiahnuť dohodu.');
+        return;
+      } catch {}
+    }
+    alert(e?.response?.data?.message || 'Nepodarilo sa stiahnuť dohodu.');
+  }
+}
+
 
   async function openDetail(id: number) {
     setDetailOpen(true);
@@ -441,35 +549,49 @@ export default function DashboardStudent() {
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-green-800">Názov firmy *</label>
+                  {/* ✅ Firma - fulltext vyhľadávanie + povinný výber */}
+                  <div className="relative">
+                    <label className="block text-sm font-medium mb-1 text-green-800">
+                      Firma (vyhľadaj a vyber zo zoznamu) <span className="text-red-600">*</span>
+                    </label>
                     <Input
-                      name="company_name"
-                      value={form.company_name}
-                      onChange={handleChange}
-                      placeholder="Fix-servis s.r.o."
+                      name="company_query"
+                      value={form.company_query}
+                      onChange={handleCompanyQueryChange}
+                      onFocus={() => setCompanyDropdownOpen(true)}
+                      placeholder="Začni písať názov firmy..."
                       required
                     />
-                  </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-green-800">Ulica</label>
-                    <Input name="street" value={form.street} onChange={handleChange} placeholder="Hlavná 123" />
-                  </div>
+                    {companyDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full max-h-56 overflow-auto rounded-md border border-green-200 bg-white p-2 shadow">
+                        {companySearchLoading ? (
+                          <div className="text-sm text-slate-600">Načítavam…</div>
+                        ) : companyResults.length === 0 ? (
+                          <div className="text-sm text-rose-600">
+                            Firma sa nenašla – prax nie je možné pridať.
+                          </div>
+                        ) : (
+                          companyResults.map((c) => (
+                            <button
+                              key={c.company_id}
+                              type="button"
+                              className="block w-full rounded-md px-2 py-1 text-left text-sm hover:bg-green-50"
+                              onClick={() => selectCompany(c)}
+                            >
+                              <div className="font-medium text-green-900">{c.company_name}</div>
+                              <div className="text-xs text-green-700">
+                                {[c.street, c.city, c.zip, c.country].filter(Boolean).join(', ')}
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-green-800">Mesto *</label>
-                      <Input name="city" value={form.city} onChange={handleChange} required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-green-800">PSČ</label>
-                      <Input name="zip" value={form.zip} onChange={handleChange} placeholder="01001" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-green-800">Štát</label>
-                      <Input name="country" value={form.country} onChange={handleChange} />
-                    </div>
+                    <p className="mt-1 text-xs text-green-700">
+                      Vybraná firma: <b>{form.company_id ? form.company_query : '—'}</b>
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -509,7 +631,16 @@ export default function DashboardStudent() {
                   {formError && <p className="text-sm text-red-600">{formError}</p>}
 
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowForm(false);
+                        setCompanyDropdownOpen(false);
+                        setCompanyResults([]);
+                        setFormError(null);
+                      }}
+                    >
                       Zrušiť
                     </Button>
                     <Button type="submit">Uložiť prax</Button>
@@ -929,7 +1060,7 @@ export default function DashboardStudent() {
               )}
             </div>
 
-            <div className="mt-4 pt-4 border-t flex items-center justify-between gap-2 bg-white sticky bottom-0">
+                        <div className="mt-4 pt-4 border-t flex items-center justify-between gap-2 bg-white sticky bottom-0">
               <div>
                 {!detailLoading && !detailError && selectedPractice && !editing && canEditOrDelete && (
                   <Button variant="destructive" onClick={deletePractice} disabled={deleteBusy}>
@@ -939,6 +1070,19 @@ export default function DashboardStudent() {
               </div>
 
               <div className="flex justify-end gap-2">
+                {/* ✅ NOVÉ: tlačidlo na stiahnutie dohody - len pre STANDARD */}
+                {!detailLoading &&
+                  !detailError &&
+                  selectedPractice &&
+                  selectedPractice.practice_type === 'standard' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadAgreement(selectedPractice.id)}
+                    >
+                      Stiahnuť dohodu (PDF)
+                    </Button>
+                  )}
+
                 {!detailLoading && !detailError && selectedPractice && !editing && canEditOrDelete && (
                   <Button onClick={() => setEditing(true)} className="bg-green-700 text-white hover:bg-green-800">
                     Upraviť
@@ -975,6 +1119,8 @@ export default function DashboardStudent() {
                 </Button>
               </div>
             </div>
+
+
           </div>
         </div>
       )}
