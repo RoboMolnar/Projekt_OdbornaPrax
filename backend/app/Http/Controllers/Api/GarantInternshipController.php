@@ -16,7 +16,6 @@ use App\Mail\InternshipStateChanged;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use App\Http\Controllers\Api\InternshipDocumentsController;
 
-
 class GarantInternshipController extends Controller
 {
     private function isPg(): bool
@@ -44,7 +43,6 @@ class GarantInternshipController extends Controller
 
         return $user;
     }
-    
 
     private function findInternshipById(Request $request, $id): Internship
     {
@@ -93,40 +91,98 @@ class GarantInternshipController extends Controller
                 'changed_by_user_id' => (int) ($actor->user_id ?? $actor->id),
                 'changed_at'         => now(),
             ]);
-
         });
     }
 
-    private function notifyStudent(Internship $i, ?string $old, string $new, User $actor): void
-    {
-        try {
-            $i->loadMissing(['student', 'company', 'state']);
-            $student = $i->student;
+private function notifyStudent(Internship $i, ?string $old, string $new, User $actor): void
+{
+    try {
+        $i->loadMissing(['student', 'company', 'state']);
+        $student = $i->student;
 
-            if (!$student || empty($student->email)) return;
-
-            Mail::to($student->email)->send(new InternshipStateChanged($i, $old, $new, $actor));
-        } catch (TransportExceptionInterface $e) {
-            Log::warning('Email send failed: ' . $e->getMessage());
-        } catch (\Throwable $e) {
-            Log::warning('Email send failed: ' . $e->getMessage());
+        if (!$student || empty($student->email)) {
+            return;
         }
-    }
 
-    private function notifyCompanyOnApproved(Internship $i): void
+        $studentName = trim(($student->firstname ?? $student->first_name ?? '') . ' ' . ($student->lastname ?? $student->last_name ?? ''));
+        if ($studentName === '') {
+            $studentName = $student->name ?? 'študent';
+        }
+
+        $companyName = $i->company?->company_name ?? '—';
+        $changedBy = $actor->role ?? 'systém';
+
+        Mail::to($student->email)->send(
+            new InternshipStateChanged($i, $old, $new, $studentName, $companyName, $changedBy)
+        );
+    } catch (\Throwable $e) {
+        Log::warning('Email send failed: ' . $e->getMessage());
+    }
+}
+
+
+    private function notifyCompany(Internship $i, ?string $old, string $new, User $actor): void
     {
         try {
-            $i->loadMissing(['company']);
+            $i->loadMissing(['company.users', 'student', 'state']);
             $company = $i->company;
 
-            if (!$company || empty($company->email)) return;
+            if (!$company) {
+                return;
+            }
+
+            $companyUser = null;
+            if ($company->relationLoaded('users')) {
+                $companyUser = $company->users->firstWhere('role', 'company') ?? $company->users->first();
+            }
+
+            $toEmail = $companyUser?->email ?? $company->email ?? null;
+            if (!$toEmail) {
+                return;
+            }
+
+            $studentName = trim(($i->student?->firstname ?? $i->student?->first_name ?? '') . ' ' . ($i->student?->lastname ?? $i->student?->last_name ?? ''));
+            if ($studentName === '') {
+                $studentName = $i->student?->name ?? 'študent';
+            }
+
+            $subject = "Zmena stavu praxe: {$new}";
+            $body = "Dobrý deň,\n\n"
+                . "Prax študenta {$studentName} zmenila stav.\n"
+                . "Predošlý stav: " . ($old ?? '—') . "\n"
+                . "Nový stav: {$new}\n\n"
+                . "Pozdravujeme,\nSystém evidencie praxí";
+
+            Mail::raw($body, function ($m) use ($toEmail, $subject) {
+                $m->to($toEmail)->subject($subject);
+            });
         } catch (\Throwable $e) {
             Log::warning('Company notify failed: ' . $e->getMessage());
         }
     }
 
+    private function ensureStandardContractUploaded(Internship $i): void
+    {
+        $typeId = DB::table('document_type')
+            ->where('document_type_name', 'PRACTICE_CONTRACT')
+            ->value('document_type_id');
+
+        if (!$typeId) {
+            abort(422, 'Chýba typ dokumentu PRACTICE_CONTRACT v databáze.');
+        }
+
+        $hasDoc = DB::table('documents')
+            ->where('internship_id', (int) ($i->internship_id ?? $i->id))
+            ->where('document_type_id', (int) $typeId)
+            ->exists();
+
+        if (!$hasDoc) {
+            abort(422, 'Nie je možné schváliť prax bez nahratej podpísanej zmluvy.');
+        }
+    }
+
     /**
-     * ✅ Spoločná query pre index + export (rešpektuje filtre)
+     * Spoločná query pre index + export (rešpektuje filtre)
      */
     private function baseQuery(Request $request)
     {
@@ -210,7 +266,9 @@ class GarantInternshipController extends Controller
                 $nm = $student?->name ?? '';
 
                 $studentName = trim($fn . ' ' . $ln);
-                if ($studentName === '') $studentName = $nm;
+                if ($studentName === '') {
+                    $studentName = $nm;
+                }
 
                 return [
                     'practice_type' => $i->practice_type ?? 'standard',
@@ -236,7 +294,6 @@ class GarantInternshipController extends Controller
         $ln = $i->student?->lastname  ?? $i->student?->last_name  ?? '';
         $nm = $i->student?->name ?? '';
 
-        // kontakt na firmu: prvý user firmy
         $companyUser = null;
         if ($i->company && $i->company->relationLoaded('users')) {
             $companyUser = $i->company->users->firstWhere('role', 'company') ?? $i->company->users->first();
@@ -252,7 +309,9 @@ class GarantInternshipController extends Controller
             $cnm = $companyUser->name ?? '';
 
             $contactName = trim($cfn . ' ' . $cln);
-            if ($contactName === '') $contactName = ($cnm !== '' ? $cnm : null);
+            if ($contactName === '') {
+                $contactName = ($cnm !== '' ? $cnm : null);
+            }
 
             $contactPhone = $companyUser->phone_number ?? null;
             $contactEmail = $companyUser->email ?? null;
@@ -269,7 +328,6 @@ class GarantInternshipController extends Controller
             'student_email'     => $i->student?->email ?? null,
             'program'           => $i->student?->fieldOfStudy?->field_name ?? null,
             'practice_type' => $i->practice_type ?? 'standard',
-
 
             'company_name' => $i->company?->company_name ?? '—',
             'street'       => $address?->street ?? null,
@@ -296,9 +354,6 @@ class GarantInternshipController extends Controller
         return response()->json($this->buildDetailPayload($i));
     }
 
-    /**
-     * ✅ update už len prax: dátumy, rok, semester, hodiny
-     */
     public function update(Request $request, $internship)
     {
         $this->requireGarant($request);
@@ -332,10 +387,6 @@ class GarantInternshipController extends Controller
         return response()->json($this->buildDetailPayload($i));
     }
 
-    /**
-     * ✅ CSV export všetkých praxí podľa filtrov
-     * GET /api/garant/internships/export?status=...&year=...&program=...&q=...
-     */
     public function exportCsv(Request $request)
     {
         $query = $this->baseQuery($request);
@@ -365,51 +416,47 @@ class GarantInternshipController extends Controller
             'Stav',
         ];
 
-return response()->streamDownload(function () use ($items, $headers) {
-    $out = fopen('php://output', 'w');
+        return response()->streamDownload(function () use ($items, $headers) {
+            $out = fopen('php://output', 'w');
 
-    // BOM kvôli Excelu (UTF-8)
-    echo "\xEF\xBB\xBF";
+            echo "\xEF\xBB\xBF";
+            fwrite($out, "sep=;\n");
+            fputcsv($out, $headers, ';');
 
-    // ✅ Povie Excelu aký je delimiter (inak to často dá do 1 bunky)
-    fwrite($out, "sep=;\n");
+            foreach ($items as $i) {
+                $payload = $this->buildDetailPayload($i);
 
-    // hlavička
-    fputcsv($out, $headers, ';');
+                $studentName = trim(($payload['student_firstname'] ?? '') . ' ' . ($payload['student_lastname'] ?? ''));
+                if ($studentName === '') {
+                    $studentName = ($payload['student_firstname'] ?? '');
+                }
 
-    foreach ($items as $i) {
-        $payload = $this->buildDetailPayload($i);
+                fputcsv($out, [
+                    $payload['id'] ?? '',
+                    $studentName,
+                    $payload['student_email'] ?? '',
+                    $payload['program'] ?? '',
+                    $payload['company_name'] ?? '',
+                    $payload['street'] ?? '',
+                    $payload['city'] ?? '',
+                    $payload['zip'] ?? '',
+                    $payload['country'] ?? '',
+                    $payload['company_contact_name'] ?? '',
+                    $payload['company_contact_phone'] ?? '',
+                    $payload['company_contact_email'] ?? '',
+                    $payload['start_date'] ?? '',
+                    $payload['end_date'] ?? '',
+                    $payload['year'] ?? '',
+                    $payload['semester'] ?? '',
+                    $payload['worked_hours'] ?? '',
+                    $payload['status'] ?? '',
+                ], ';');
+            }
 
-        $studentName = trim(($payload['student_firstname'] ?? '') . ' ' . ($payload['student_lastname'] ?? ''));
-        if ($studentName === '') $studentName = ($payload['student_firstname'] ?? '');
-
-        fputcsv($out, [
-            $payload['id'] ?? '',
-            $studentName,
-            $payload['student_email'] ?? '',
-            $payload['program'] ?? '',
-            $payload['company_name'] ?? '',
-            $payload['street'] ?? '',
-            $payload['city'] ?? '',
-            $payload['zip'] ?? '',
-            $payload['country'] ?? '',
-            $payload['company_contact_name'] ?? '',
-            $payload['company_contact_phone'] ?? '',
-            $payload['company_contact_email'] ?? '',
-            $payload['start_date'] ?? '',
-            $payload['end_date'] ?? '',
-            $payload['year'] ?? '',
-            $payload['semester'] ?? '',
-            $payload['worked_hours'] ?? '',
-            $payload['status'] ?? '',
-        ], ';');
-    }
-
-    fclose($out);
-}, $filename, [
-    'Content-Type' => 'text/csv; charset=UTF-8',
-]);
-
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     public function approve(Request $request, $internship)
@@ -427,20 +474,24 @@ return response()->streamDownload(function () use ($items, $headers) {
                 'message' => 'Schváliť možno len prax v stave Potvrdená alebo Neschválená.',
             ], 422);
         }
+
+        $this->ensureStandardContractUploaded($i);
+
         if (($i->practice_type ?? 'standard') === 'employment') {
-    $docsCtrl = app(InternshipDocumentsController::class);
-    $comp = $docsCtrl->employmentCompliance($i);
-    if (!($comp['ok'] ?? false)) {
-        return response()->json([
-            'ok' => false,
-            'message' => 'Nie je možné schváliť prax typu "Platené zamestnanie" bez dokladov (zmluva alebo 3 po sebe idúce faktúry).',
-        ], 422);
-    }
-}
+            $docsCtrl = app(InternshipDocumentsController::class);
+            $comp = $docsCtrl->employmentCompliance($i);
+            if (!($comp['ok'] ?? false)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Nie je možné schváliť prax typu "Platené zamestnanie" bez dokladov (zmluva alebo 3 po sebe idúce faktúry).',
+                ], 422);
+            }
+        }
+
         $this->changeStateInternal($i, 'Schválená', $user);
 
         $this->notifyStudent($i, $old, 'Schválená', $user);
-        $this->notifyCompanyOnApproved($i);
+        $this->notifyCompany($i, $old, 'Schválená', $user);
 
         return response()->json(['ok' => true, 'status' => 'Schválená']);
     }
@@ -463,6 +514,7 @@ return response()->streamDownload(function () use ($items, $headers) {
 
         $this->changeStateInternal($i, 'Neschválená', $user);
         $this->notifyStudent($i, $old, 'Neschválená', $user);
+        $this->notifyCompany($i, $old, 'Neschválená', $user);
 
         return response()->json(['ok' => true, 'status' => 'Neschválená']);
     }
@@ -490,6 +542,7 @@ return response()->streamDownload(function () use ($items, $headers) {
         $new = (string) $payload['state'];
         $this->changeStateInternal($i, $new, $user);
         $this->notifyStudent($i, $old, $new, $user);
+        $this->notifyCompany($i, $old, $new, $user);
 
         return response()->json(['ok' => true, 'status' => $new]);
     }
@@ -509,8 +562,13 @@ return response()->streamDownload(function () use ($items, $headers) {
 
         $new = (string) $payload['state'];
 
+        if ($new === 'Schválená') {
+            $this->ensureStandardContractUploaded($i);
+        }
+
         $this->changeStateInternal($i, $new, $user);
         $this->notifyStudent($i, $old, $new, $user);
+        $this->notifyCompany($i, $old, $new, $user);
 
         return response()->json(['ok' => true, 'status' => $new]);
     }
