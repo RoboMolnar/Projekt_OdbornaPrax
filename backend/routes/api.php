@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\DocumentDownloadController;
 use App\Http\Controllers\Api\CompanySearchController;
 
 use App\Http\Controllers\Api\AgreementController;
+use App\Http\Controllers\Api\ExternalIntegrationController;
 
 Route::get('/health', function () {
     return response()->json([
@@ -27,6 +28,14 @@ Route::get('/health', function () {
         'app'  => config('app.name', 'Laravel'),
     ]);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Externý systém – zmena stavu praxe (Schválená -> Obhájená)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth:sanctum', 'abilities:external-integration'])
+    ->post('/external/internships/{internship}/defend', [ExternalIntegrationController::class, 'markDefended']);
 
 /*
 |--------------------------------------------------------------------------

@@ -5,6 +5,8 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\RoleMiddleware; // 👈 pridaj
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
+use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -32,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
+            'abilities' => CheckAbilities::class,
+            'ability' => CheckForAnyAbility::class,
             'force.password.change' => ForcePasswordChange::class,
             'role' => RoleMiddleware::class, // 👈 pridaj
         ]);
