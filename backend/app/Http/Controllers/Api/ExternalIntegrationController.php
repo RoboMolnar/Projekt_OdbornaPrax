@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Internship;
 use App\Models\InternshipState;
 use App\Models\InternshipStateChange;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -14,6 +15,14 @@ class ExternalIntegrationController extends Controller
     public function markDefended(Request $request, $internship)
     {
         $user = $request->user();
+        if (!$user) {
+            $actorId = (int) config('services.external_system.user_id', 0);
+            if ($actorId > 0) {
+                $user = User::query()
+                    ->where('user_id', $actorId)
+                    ->first();
+            }
+        }
         if (!$user) {
             abort(401, 'Neprihlasený používateľ.');
         }

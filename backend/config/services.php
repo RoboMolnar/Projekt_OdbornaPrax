@@ -28,5 +28,8 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'external_system' => [
+        'user_id' => env('EXTERNAL_SYSTEM_USER_ID'),
+    ],
 
 ];

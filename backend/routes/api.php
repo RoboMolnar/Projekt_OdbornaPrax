@@ -34,7 +34,7 @@ Route::get('/health', function () {
 | Externý systém – zmena stavu praxe (Schválená -> Obhájená)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', 'abilities:external-integration'])
+Route::middleware(['scopes:external-integration'])
     ->post('/external/internships/{internship}/defend', [ExternalIntegrationController::class, 'markDefended']);
 
 /*
