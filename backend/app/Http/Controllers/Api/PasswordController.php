@@ -71,7 +71,7 @@ class PasswordController extends Controller
             ]);
         }
 
-        $plain = Str::password(12);
+        $plain = Str::password(14, true, true, false, false);
 
         $user->reset_temp_password = Hash::make($plain);
         $user->reset_temp_expires_at = now()->addMinutes(15);

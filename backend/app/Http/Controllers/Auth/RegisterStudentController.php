@@ -61,7 +61,7 @@ class RegisterStudentController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $plain = Str::password(14);
+            $plain = Str::password(14, true, true, false, false);
 
             $user = User::create([
                 'role'                 => 'student',

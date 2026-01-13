@@ -5,7 +5,7 @@ return [
 
     'guard' => ['web'],
 
-    'expiration' => null,
+    'expiration' => 60,
 
     // V tomto projekte nepoužívame vlastné App\Http middleware triedy, ale skeleton
     // konfiguruje middleware v bootstrap/app.php. Preto použijeme frameworkové triedy.

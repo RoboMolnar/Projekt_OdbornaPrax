@@ -3,7 +3,7 @@
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ForcePasswordChange;
-use App\Http\Middleware\RoleMiddleware; // 👈 pridaj
+use App\Http\Middleware\RoleMiddleware; 
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
@@ -41,11 +41,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'scopes' => CheckToken::class,
             'scope' => CheckTokenForAnyScope::class,
             'force.password.change' => ForcePasswordChange::class,
-            'role' => RoleMiddleware::class, // 👈 pridaj
+            'role' => RoleMiddleware::class, // 
         ]);
     })
     ->withProviders([
-        App\Providers\FortifyServiceProvider::class,
+    App\Providers\FortifyServiceProvider::class,
+    Laravel\Passport\PassportServiceProvider::class,
     ])
     ->withExceptions(function (Exceptions $exceptions) {
         //

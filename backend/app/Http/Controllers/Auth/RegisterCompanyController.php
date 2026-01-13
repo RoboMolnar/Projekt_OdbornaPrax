@@ -88,7 +88,7 @@ class RegisterCompanyController extends Controller
             }
 
             // 2) vygenerujeme dočasné heslo
-            $plain = Str::password(14);
+            $plain = Str::password(14, true, true, false, false);
 
             // 3) vytvoríme používateľa – konto firmy (kontakt)
             $user = User::create([

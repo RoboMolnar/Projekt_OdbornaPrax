@@ -119,7 +119,7 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | FIRMY – zoznam (iba aktivované firmy) – ak niekde používaš
+    | FIRMY – zoznam (iba aktivované firmy) 
     |----------------------------------------------------------------------
     */
     Route::get('/companies', function () {
@@ -163,7 +163,7 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
 */
 Route::middleware(['auth:sanctum', 'role:garant,external'])->group(function () {
 
-    // ✅ AUTOCOMPLETE: študenti pre garanta (typeahead)
+    // AUTOCOMPLETE: študenti pre garanta (typeahead)
     // GET /api/garant/students/search?q=novak
     Route::get('/garant/students/search', function (Request $request) {
         $q = trim((string) $request->query('q', ''));
@@ -211,7 +211,7 @@ Route::middleware(['auth:sanctum', 'role:garant,external'])->group(function () {
         return response()->json($rows);
     });
 
-    // ✅ AUTOCOMPLETE: firmy pre garanta (typeahead)
+    // AUTOCOMPLETE: firmy pre garanta (typeahead)
     // GET /api/garant/companies/search?q=ibm
     Route::get('/garant/companies/search', function (Request $request) {
         $q = trim((string) $request->query('q', ''));
