@@ -161,7 +161,90 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
 | GARANT – praxe + dokumenty
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', 'role:garant'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:garant,external'])->group(function () {
+
+    // ✅ AUTOCOMPLETE: študenti pre garanta (typeahead)
+    // GET /api/garant/students/search?q=novak
+    Route::get('/garant/students/search', function (Request $request) {
+        $q = trim((string) $request->query('q', ''));
+
+        // min. dĺžka, aby sa nedalo dumpovať všetko
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $isPg = strtolower((string) DB::getDriverName()) === 'pgsql';
+
+        $query = DB::table('users')
+            ->where('role', 'student')
+            ->where('active', 1);
+
+        if ($isPg) {
+            $query->where(function ($sub) use ($q) {
+                $sub->whereRaw("concat(coalesce(first_name,''), ' ', coalesce(last_name,'')) ILIKE ?", ["%{$q}%"])
+                    ->orWhere('email', 'ILIKE', "%{$q}%");
+            });
+        } else {
+            $query->where(function ($sub) use ($q) {
+                $sub->where(DB::raw("CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,''))"), 'LIKE', "%{$q}%")
+                    ->orWhere('email', 'LIKE', "%{$q}%");
+            });
+        }
+
+        $rows = $query
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get(['user_id', 'email', 'first_name', 'last_name'])
+            ->map(function ($u) {
+                $full = trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? ''));
+                return [
+                    'id' => (int) ($u->user_id ?? 0),
+                    'label' => trim($full . (isset($u->email) && $u->email ? " ({$u->email})" : '')),
+                    'email' => $u->email ?? null,
+                    'first_name' => $u->first_name ?? '',
+                    'last_name' => $u->last_name ?? '',
+                ];
+            })
+            ->values();
+
+        return response()->json($rows);
+    });
+
+    // ✅ AUTOCOMPLETE: firmy pre garanta (typeahead)
+    // GET /api/garant/companies/search?q=ibm
+    Route::get('/garant/companies/search', function (Request $request) {
+        $q = trim((string) $request->query('q', ''));
+
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $isPg = strtolower((string) DB::getDriverName()) === 'pgsql';
+
+        $query = DB::table('company');
+
+        if ($isPg) {
+            $query->where('company_name', 'ILIKE', "%{$q}%");
+        } else {
+            $query->where('company_name', 'LIKE', "%{$q}%");
+        }
+
+        $rows = $query
+            ->orderBy('company_name')
+            ->limit(20)
+            ->get(['company_id', 'company_name'])
+            ->map(function ($c) {
+                return [
+                    'id' => (int) ($c->company_id ?? 0),
+                    'label' => (string) ($c->company_name ?? ''),
+                    'company_name' => (string) ($c->company_name ?? ''),
+                ];
+            })
+            ->values();
+
+        return response()->json($rows);
+    });
 
     // dokumenty k praxi (garant)
     Route::get('/garant/internships/{internship}/documents', [InternshipDocumentsController::class, 'listForGarant']);

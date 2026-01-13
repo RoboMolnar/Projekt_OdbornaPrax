@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 
 class InternshipDocumentsController extends Controller
 {
-    private function requireRole(Request $request, string $role)
+    private function requireRole(Request $request, string ...$roles)
     {
         $user = $request->user();
         if (!$user) {
@@ -20,7 +20,12 @@ class InternshipDocumentsController extends Controller
         $rawRole = $user->role ?? $user->role_name ?? $user->type ?? null;
         $r = $rawRole !== null ? strtolower(trim((string) $rawRole)) : null;
 
-        if ($r !== $role) {
+        $allowed = array_map(
+            fn ($x) => strtolower(trim((string) $x)),
+            $roles
+        );
+
+        if ($r === null || !in_array($r, $allowed, true)) {
             abort(response()->json(['message' => 'Prístup zamietnutý.'], 403));
         }
 
@@ -361,7 +366,7 @@ if ($data['type'] === 'EMPLOYMENT_INVOICE' && empty($data['invoice_period'])) {
      */
     public function listForGarant(Request $request, int $internship): JsonResponse
     {
-        $user = $this->requireRole($request, 'garant');
+        $user = $this->requireRole($request, 'garant', 'external');
 
         $ownedByGarant = DB::table('internship')
             ->where('internship_id', $internship)
@@ -380,7 +385,7 @@ if ($data['type'] === 'EMPLOYMENT_INVOICE' && empty($data['invoice_period'])) {
      */
     public function deleteForGarant(Request $request, int $document): JsonResponse
     {
-        $user = $this->requireRole($request, 'garant');
+        $user = $this->requireRole($request, 'garant', 'external');
 
         $row = DB::table('documents')
             ->join('internship', 'internship.internship_id', '=', 'documents.internship_id')

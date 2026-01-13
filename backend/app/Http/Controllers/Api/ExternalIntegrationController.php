@@ -12,20 +12,33 @@ use Illuminate\Support\Facades\DB;
 
 class ExternalIntegrationController extends Controller
 {
+    private function resolveActor(Request $request): User
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        // ak je request autentifikovaný, audituj presného používateľa
+        if ($user) {
+            return $user;
+        }
+
+        // fallback: fixný externý systém user (z configu)
+        $actorId = (int) config('services.external_system.user_id', 0);
+        if ($actorId <= 0) {
+            abort(401, 'Neprihlasený používateľ (chýba external system user_id).');
+        }
+
+        $actor = User::query()->where('user_id', $actorId)->first();
+        if (!$actor) {
+            abort(401, 'Neprihlasený používateľ (external system účet neexistuje).');
+        }
+
+        return $actor;
+    }
+
     public function markDefended(Request $request, $internship)
     {
-        $user = $request->user();
-        if (!$user) {
-            $actorId = (int) config('services.external_system.user_id', 0);
-            if ($actorId > 0) {
-                $user = User::query()
-                    ->where('user_id', $actorId)
-                    ->first();
-            }
-        }
-        if (!$user) {
-            abort(401, 'Neprihlasený používateľ.');
-        }
+        $actor = $this->resolveActor($request);
 
         $item = Internship::query()
             ->with('state')
@@ -61,13 +74,13 @@ class ExternalIntegrationController extends Controller
         }
 
         $fromStateId = (int) $item->state_id;
-        $toStateId = (int) $toState->internship_state_id;
+        $toStateId   = (int) $toState->internship_state_id;
 
         if ($fromStateId === $toStateId) {
             return response()->json(['ok' => true, 'status' => 'Obhájená']);
         }
 
-        DB::transaction(function () use ($item, $fromStateId, $toStateId, $user) {
+        DB::transaction(function () use ($item, $fromStateId, $toStateId, $actor) {
             $item->state_id = $toStateId;
             $item->save();
 
@@ -75,7 +88,7 @@ class ExternalIntegrationController extends Controller
                 'internship_id'      => (int) ($item->internship_id ?? $item->id),
                 'from_state_id'      => $fromStateId,
                 'to_state_id'        => $toStateId,
-                'changed_by_user_id' => (int) ($user->user_id ?? $user->id ?? $user->getKey()),
+                'changed_by_user_id' => (int) ($actor->user_id ?? $actor->getKey()),
                 'note'               => 'external-system',
                 'changed_at'         => now(),
             ]);

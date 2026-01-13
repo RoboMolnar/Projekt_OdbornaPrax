@@ -37,8 +37,9 @@ class GarantInternshipController extends Controller
             abort(401, 'Neprihlásený používateľ.');
         }
 
-        if (($user->role ?? null) !== 'garant') {
-            abort(403, 'Prístup povolený len pre garanta.');
+        $role = $user->role ?? null;
+        if (!in_array($role, ['garant', 'external'], true)) {
+            abort(403, 'Prístup povolený len pre garanta alebo externý systém.');
         }
 
         return $user;
@@ -94,32 +95,31 @@ class GarantInternshipController extends Controller
         });
     }
 
-private function notifyStudent(Internship $i, ?string $old, string $new, User $actor): void
-{
-    try {
-        $i->loadMissing(['student', 'company', 'state']);
-        $student = $i->student;
+    private function notifyStudent(Internship $i, ?string $old, string $new, User $actor): void
+    {
+        try {
+            $i->loadMissing(['student', 'company', 'state']);
+            $student = $i->student;
 
-        if (!$student || empty($student->email)) {
-            return;
+            if (!$student || empty($student->email)) {
+                return;
+            }
+
+            $studentName = trim(($student->firstname ?? $student->first_name ?? '') . ' ' . ($student->lastname ?? $student->last_name ?? ''));
+            if ($studentName === '') {
+                $studentName = $student->name ?? 'študent';
+            }
+
+            $companyName = $i->company?->company_name ?? '—';
+            $changedBy = $actor->role ?? 'systém';
+
+            Mail::to($student->email)->send(
+                new InternshipStateChanged($i, $old, $new, $studentName, $companyName, $changedBy)
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Email send failed: ' . $e->getMessage());
         }
-
-        $studentName = trim(($student->firstname ?? $student->first_name ?? '') . ' ' . ($student->lastname ?? $student->last_name ?? ''));
-        if ($studentName === '') {
-            $studentName = $student->name ?? 'študent';
-        }
-
-        $companyName = $i->company?->company_name ?? '—';
-        $changedBy = $actor->role ?? 'systém';
-
-        Mail::to($student->email)->send(
-            new InternshipStateChanged($i, $old, $new, $studentName, $companyName, $changedBy)
-        );
-    } catch (\Throwable $e) {
-        Log::warning('Email send failed: ' . $e->getMessage());
     }
-}
-
 
     private function notifyCompany(Internship $i, ?string $old, string $new, User $actor): void
     {
@@ -193,13 +193,35 @@ private function notifyStudent(Internship $i, ?string $old, string $new, User $a
         $year    = (string) $request->query('year', '');
         $program = (string) $request->query('program', '');
 
+        // ✅ NOVÉ – presné filtre
+        $studentId = $request->query('student_user_id', null);
+        $companyId = $request->query('company_id', null);
+
         $isPg    = $this->isPg();
 
         $query = Internship::query()
+            // nechávam fieldOfStudy ako fallback, ale primárne ideme cez study_type
             ->with(['student.fieldOfStudy', 'company.address', 'company.users', 'state']);
 
         if (!app()->environment('local')) {
             $query->where('garant_user_id', $user->user_id);
+        }
+
+        // ✅ NOVÉ – aplikuj presné filtre (ak sú zadané)
+        if ($studentId !== null && $studentId !== '') {
+            $s = (string) $studentId;
+            if (!ctype_digit($s)) {
+                abort(422, 'Neplatný student_user_id.');
+            }
+            $query->where('student_user_id', (int) $s);
+        }
+
+        if ($companyId !== null && $companyId !== '') {
+            $c = (string) $companyId;
+            if (!ctype_digit($c)) {
+                abort(422, 'Neplatný company_id.');
+            }
+            $query->where('company_id', (int) $c);
         }
 
         if ($q !== '') {
@@ -240,9 +262,10 @@ private function notifyStudent(Internship $i, ?string $old, string $new, User $a
             $query->where('year', (int) $year);
         }
 
+        // ✅ OPRAVA: program filtruj podľa users.study_type (to je to, čo máš reálne vyplnené)
         if ($program !== '' && $program !== 'all') {
-            $query->whereHas('student.fieldOfStudy', function ($f) use ($program) {
-                $f->where('field_name', $program);
+            $query->whereHas('student', function ($s) use ($program) {
+                $s->where('study_type', $program);
             });
         }
 
@@ -270,12 +293,17 @@ private function notifyStudent(Internship $i, ?string $old, string $new, User $a
                     $studentName = $nm;
                 }
 
+                // ✅ OPRAVA: program primárne zober z study_type (fallback na fieldOfStudy ak existuje)
+                $program = $student?->study_type
+                    ?? $student?->fieldOfStudy?->field_of_study_name
+                    ?? null;
+
                 return [
                     'practice_type' => $i->practice_type ?? 'standard',
 
                     'id'      => (int) ($i->internship_id ?? $i->id),
                     'student' => $studentName,
-                    'program' => $student?->fieldOfStudy?->field_name ?? null,
+                    'program' => $program,
                     'firm'    => $company?->company_name ?? '—',
                     'year'    => (int) ($i->year ?? 0),
                     'status'  => $state?->internship_state_name ?? '—',
@@ -320,13 +348,21 @@ private function notifyStudent(Internship $i, ?string $old, string $new, User $a
         $companyEmail = $contactEmail ?? ($i->company?->email ?? null);
         $companyPhone = $contactPhone ?? ($i->company?->phone_contact ?? null);
 
+        // ✅ OPRAVA: program primárne zober z study_type (fallback na fieldOfStudy ak existuje)
+        $program = $i->student?->study_type
+            ?? $i->student?->fieldOfStudy?->field_of_study_name
+            ?? null;
+
         return [
             'id' => (int) ($i->internship_id ?? $i->id),
+
+            'student_user_id' => (int) ($i->student_user_id ?? 0),
+            'company_id'      => (int) ($i->company_id ?? 0),
 
             'student_firstname' => $fn !== '' ? $fn : ($nm !== '' ? $nm : ''),
             'student_lastname'  => $ln,
             'student_email'     => $i->student?->email ?? null,
-            'program'           => $i->student?->fieldOfStudy?->field_name ?? null,
+            'program'           => $program,
             'practice_type' => $i->practice_type ?? 'standard',
 
             'company_name' => $i->company?->company_name ?? '—',
@@ -365,10 +401,41 @@ private function notifyStudent(Internship $i, ?string $old, string $new, User $a
             'year'         => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'semester'     => ['nullable', Rule::in(['1', '2'])],
             'worked_hours' => ['nullable', 'integer', 'min:0', 'max:10000'],
+
+            'student_user_id' => [
+                'nullable',
+                'integer',
+                function ($attribute, $value, $fail) {
+                    if ($value === null) return;
+
+                    $exists = User::query()
+                        ->where('user_id', (int) $value)
+                        ->where('role', 'student')
+                        ->exists();
+
+                    if (!$exists) {
+                        $fail('Zvolený študent neexistuje.');
+                    }
+                }
+            ],
+            'company_id' => [
+                'nullable',
+                'integer',
+                function ($attribute, $value, $fail) use ($i) {
+                    if ($value === null) return;
+
+                    $companyModel = $i->company()->getRelated();
+                    $exists = $companyModel->newQuery()->whereKey((int) $value)->exists();
+
+                    if (!$exists) {
+                        $fail('Zvolená firma neexistuje.');
+                    }
+                }
+            ],
         ]);
 
         DB::transaction(function () use ($i, $data) {
-            $fields = ['start_date', 'end_date', 'year', 'semester', 'worked_hours'];
+            $fields = ['start_date', 'end_date', 'year', 'semester', 'worked_hours', 'student_user_id', 'company_id'];
             $dirty = false;
 
             foreach ($fields as $f) {
